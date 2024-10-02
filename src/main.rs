@@ -1,18 +1,30 @@
 mod h2_mol;
 mod mcmc;
+mod conf;
 
 use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
 use mcmc::{MCMCParams, MCMCSimulation, MCMCResults};
+use clap::Parser;
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value = "config.yml")]
+    config: String,
+}
 
 
 fn main() {
     // Set up the H2 molecule
-    let h2 = H2MoleculeVB {
-        H1: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, 0.7) },
-        H2: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, -0.7) },
-        J: Jastrow1 { F: 1.0 },
-    };
+    // let h2 = H2MoleculeVB {
+    //     H1: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, 0.7) },
+    //     H2: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, -0.7) },
+    //     J: Jastrow1 { F: 1.0 },
+    // };
+
+    // read the config file, with command line argument, use clap mod to input the file name
+    let args = Args::parse();
+    let h2 = conf::read_h2molecule_vb(&args.config);
 
     // Set up MCMC parameters
     let params = MCMCParams {

@@ -4,6 +4,7 @@
 extern crate nalgebra as na;
 use na::{Vector3, Rotation3};
 use rand_distr::Normal;
+use serde::{Deserialize, Serialize};
 use crate::mcmc::EnergyCalculator;
 
 // single center wave function
@@ -70,6 +71,7 @@ pub trait MultiWfn {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct Slater1s {
     pub(crate) alpha: f64,
     pub(crate) R: Vector3<f64>,
@@ -107,6 +109,7 @@ impl SingleWfn for Slater1s {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct Jastrow1 {
     pub(crate) F: f64,
 }
@@ -164,6 +167,7 @@ impl MultiWfn for Jastrow1 {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct H2MoleculeVB {
     pub(crate) H1: Slater1s,
     pub(crate) H2: Slater1s,
