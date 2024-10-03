@@ -126,6 +126,6 @@ mod tests {
         let analytical_laplacian = h2.laplacian(&r);
         let numerical_laplacian = h2.numerical_laplacian(&r, h);
 
-        assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-2);
+        assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-3);
     }
 }

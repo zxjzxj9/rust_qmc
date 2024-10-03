@@ -9,6 +9,8 @@ pub struct MCMCParams {
     pub n_walkers: usize,
     pub n_steps: usize,
     pub initial_step_size: f64,
+    pub max_step_size: f64,
+    pub min_step_size: f64,
     pub target_acceptance: f64,
     pub adaptation_interval: usize,
 }
@@ -20,7 +22,7 @@ pub struct MCMCState {
 }
 
 pub struct MCMCResults {
-    pub energies: Vec<f64>,
+    pub energy: f64,
     pub error: f64,
     pub autocorrelation_time: f64,
 }
@@ -116,10 +118,12 @@ impl<T: MultiWfn + EnergyCalculator> MCMCSimulation<T> {
         let acceptance_rate = acceptance_count as f64 / (self.params.n_walkers * self.params.adaptation_interval) as f64;
         let adjustment_factor = (acceptance_rate / self.params.target_acceptance).sqrt();
         self.step_size *= adjustment_factor;
+        self.step_size = self.step_size.min(self.params.max_step_size);
+        self.step_size = self.step_size.max(self.params.min_step_size);
     }
 
     fn compute_results(&self, energies: Vec<f64>) -> MCMCResults {
-        let mean_energy: f64 = energies.iter().sum::<f64>() / energies.len() as f64;
+        let energy: f64 = energies.iter().sum::<f64>() / energies.len() as f64;
 
         // Compute autocorrelation time
         let autocorrelation_time = self.compute_autocorrelation_time(&energies);
@@ -128,7 +132,7 @@ impl<T: MultiWfn + EnergyCalculator> MCMCSimulation<T> {
         let error = self.compute_error(&energies, autocorrelation_time);
 
         MCMCResults {
-            energies,
+            energy,
             error,
             autocorrelation_time,
         }

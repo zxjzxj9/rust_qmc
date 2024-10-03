@@ -101,7 +101,7 @@ impl SingleWfn for Slater1s {
         let r_minus_R = r - self.R;
         let r_norm = r_minus_R.norm();
         if r_norm == 0.0 {
-            return 0.0; // Handle singularity at r = R
+            return f64::NEG_INFINITY; // Handle singularity at r = R
         }
         let exp_part = (-self.alpha * r_norm).exp();
         let laplacian = (self.alpha.powi(2) - 2.0 * self.alpha / r_norm) * exp_part;
@@ -174,54 +174,102 @@ pub(crate) struct H2MoleculeVB {
     pub(crate) J: Jastrow1,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct H2MoleculeMO {
+    pub(crate) H1: Slater1s,
+    pub(crate) H2: Slater1s,
+    pub(crate) J: Jastrow1,
+}
+
 impl MultiWfn for H2MoleculeVB {
     fn initialize(&self) -> Vec<Vector3<f64>> {
         self.J.initialize()
     }
     fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
-        let psi_1 = self.H1.evaluate(&r[0]);
-        let psi_2 = self.H2.evaluate(&r[1]);
+        let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
+        let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
         let j = self.J.evaluate(r);
         psi_1 * psi_2 * j
     }
 
     fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
-        let psi_1 = self.H1.evaluate(&r[0]);
-        let psi_2 = self.H2.evaluate(&r[1]);
+        // Evaluate psi_1 and psi_2
+        let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
+        let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
         let j = self.J.evaluate(r);
 
-        let grad_1 = self.H1.derivative(&r[0]);
-        let grad_2 = self.H2.derivative(&r[1]);
-        let grad_j = self.J.derivative(r);
+        // Derivatives of H1 and H2 at r[0]
+        let h1_eval_r0 = self.H1.evaluate(&r[0]);
+        let h2_eval_r0 = self.H2.evaluate(&r[0]);
+        let h1_deriv_r0 = self.H1.derivative(&r[0]);
+        let h2_deriv_r0 = self.H2.derivative(&r[0]);
+        // Derivative of psi_1 with respect to r[0]
+        let psi_1_derivative = h1_deriv_r0 * h2_eval_r0 + h1_eval_r0 * h2_deriv_r0;
 
-        vec![
-            grad_1 * psi_2 * j + psi_1 * psi_2 * grad_j[0],
-            psi_1 * grad_2 * j + psi_1 * psi_2 * grad_j[1],
-        ]
+        // Derivatives of H1 and H2 at r[1]
+        let h1_eval_r1 = self.H1.evaluate(&r[1]);
+        let h2_eval_r1 = self.H2.evaluate(&r[1]);
+        let h1_deriv_r1 = self.H1.derivative(&r[1]);
+        let h2_deriv_r1 = self.H2.derivative(&r[1]);
+        // Derivative of psi_2 with respect to r[1]
+        let psi_2_derivative = h1_deriv_r1 * h2_eval_r1 + h1_eval_r1 * h2_deriv_r1;
+
+        // Derivative of J with respect to r[0] and r[1]
+        let j_derivative = self.J.derivative(r); // Returns Vec<Vector3<f64>>
+
+        // Compute the derivatives with respect to r[0] and r[1]
+        let derivative_0 = psi_2 * (psi_1_derivative * j + psi_1 * j_derivative[0]);
+        let derivative_1 = psi_1 * (psi_2_derivative * j + psi_2 * j_derivative[1]);
+
+        vec![derivative_0, derivative_1]
     }
 
+
     fn laplacian(&self, r: &Vec<Vector3<f64>>) -> f64 {
-        let psi_1 = self.H1.evaluate(&r[0]);
-        let psi_2 = self.H2.evaluate(&r[1]);
+        // Evaluate psi_1 and psi_2
+        let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
+        let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
         let j = self.J.evaluate(r);
 
-        let grad_1 = self.H1.derivative(&r[0]);
-        let grad_2 = self.H2.derivative(&r[1]);
-        let grad_j = self.J.derivative(r);
+        // Derivatives and Laplacians at r[0]
+        let h1_eval_r0 = self.H1.evaluate(&r[0]);
+        let h2_eval_r0 = self.H2.evaluate(&r[0]);
+        let h1_deriv_r0 = self.H1.derivative(&r[0]);
+        let h2_deriv_r0 = self.H2.derivative(&r[0]);
+        let h1_laplacian_r0 = self.H1.laplacian(&r[0]);
+        let h2_laplacian_r0 = self.H2.laplacian(&r[0]);
 
-        let lap_1 = self.H1.laplacian(&r[0]);
-        let lap_2 = self.H2.laplacian(&r[1]);
-        let lap_j = self.J.laplacian(r);
+        // Derivative and Laplacian of psi_1
+        let psi_1_derivative = h1_deriv_r0 * h2_eval_r0 + h1_eval_r0 * h2_deriv_r0;
+        let psi_1_laplacian = h1_laplacian_r0 * h2_eval_r0
+            + 2.0 * h1_deriv_r0.dot(&h2_deriv_r0)
+            + h1_eval_r0 * h2_laplacian_r0;
 
-        // Compute ∇²ψ using the product rule
-        let term1 = lap_1 * psi_2 * j;
-        let term2 = psi_1 * lap_2 * j;
-        let term3 = psi_1 * psi_2 * lap_j;
-        let term4 = 2.0 * (grad_1.dot(&grad_j[0]) * psi_2 +
-            psi_1 * grad_2.dot(&grad_j[1]) +
-            grad_1.dot(&grad_2) * j);
+        // Derivatives and Laplacians at r[1]
+        let h1_eval_r1 = self.H1.evaluate(&r[1]);
+        let h2_eval_r1 = self.H2.evaluate(&r[1]);
+        let h1_deriv_r1 = self.H1.derivative(&r[1]);
+        let h2_deriv_r1 = self.H2.derivative(&r[1]);
+        let h1_laplacian_r1 = self.H1.laplacian(&r[1]);
+        let h2_laplacian_r1 = self.H2.laplacian(&r[1]);
 
-        term1 + term2 + term3 + term4
+        // Derivative and Laplacian of psi_2
+        let psi_2_derivative = h1_deriv_r1 * h2_eval_r1 + h1_eval_r1 * h2_deriv_r1;
+        let psi_2_laplacian = h1_laplacian_r1 * h2_eval_r1
+            + 2.0 * h1_deriv_r1.dot(&h2_deriv_r1)
+            + h1_eval_r1 * h2_laplacian_r1;
+
+        // Derivative and Laplacian of J
+        let j_derivative = self.J.derivative(r); // Vec<Vector3<f64>>
+        let j_laplacian = self.J.laplacian(r);   // f64
+
+        // Compute Laplacian contributions
+        let laplacian_0 = psi_2
+            * (psi_1_laplacian * j + 2.0 * psi_1_derivative.dot(&j_derivative[0]) + psi_1 * j_laplacian);
+        let laplacian_1 = psi_1
+            * (psi_2_laplacian * j + 2.0 * psi_2_derivative.dot(&j_derivative[1]) + psi_2 * j_laplacian);
+
+        laplacian_0 + laplacian_1
     }
 }
 
@@ -235,8 +283,9 @@ impl EnergyCalculator for H2MoleculeVB {
         let lap = self.laplacian(positions);
 
         let kinetic = -0.5 * lap / psi;
-        let potential = -1.0 / r12_norm
+        let potential = 1.0 / r12_norm
             - 1.0 / (r1 - self.H1.R).norm() - 1.0 / (r2 - self.H2.R).norm()
+            - 1.0 / (r1 - self.H2.R).norm() - 1.0 / (r1 - self.H2.R).norm()
             + 1.0 / (self.H1.R - self.H2.R).norm();
         kinetic + potential
     }

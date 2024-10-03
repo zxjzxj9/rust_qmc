@@ -1,6 +1,7 @@
 mod h2_mol;
 mod mcmc;
 mod conf;
+mod tests;
 
 use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
@@ -13,6 +14,7 @@ struct Args {
     config: String,
 }
 
+const Ha_TO_eV: f64 = 27.21138602;
 
 fn main() {
     // Set up the H2 molecule
@@ -28,9 +30,11 @@ fn main() {
 
     // Set up MCMC parameters
     let params = MCMCParams {
-        n_walkers: 1000,
-        n_steps: 10000,
-        initial_step_size: 0.1,
+        n_walkers: 10,
+        n_steps: 20000000,
+        initial_step_size: 1.0,
+        max_step_size: 2.0,
+        min_step_size: 0.2,
         target_acceptance: 0.5,
         adaptation_interval: 100,
     };
@@ -44,7 +48,8 @@ fn main() {
     println!("----------------------------------------");
     println!("Number of walkers: {}", params.n_walkers);
     println!("Number of steps: {}", params.n_steps);
-    println!("Final energy: {:.6} ± {:.6} Ha", results.energies.last().unwrap(), results.error);
+    println!("Final energy: {:.6} ± {:.6} Ha", results.energy, results.error);
+    println!("Binding energy: {:.6} ± {:.6} eV", Ha_TO_eV * (results.energy + 1.0), Ha_TO_eV * results.error);
     println!("Autocorrelation time: {:.2} steps", results.autocorrelation_time);
 
     // Calculate and print average energy for the second half of the simulation
