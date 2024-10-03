@@ -10,7 +10,7 @@ Simply run the following command in the terminal:
 cargo run --release
 ```
 
-### H2 Result
+## H2 Result
 Following is a table with $\alpha$, $F$ and $E$ for the H2 molecule. 
 The values are obtained using the VMC method with $2\times10^6$ samples.
 
@@ -22,9 +22,9 @@ The values are obtained using the VMC method with $2\times10^6$ samples.
 | LCAO  | 1.3      | 3.0 | -4.287              |
 
 
-## Todos
+## ToDos
 
 - [ ] Add rayon for parallelization
-- [ ] Support LCAO-MO basis
+- [x] Support LCAO-MO basis
 - [ ] Other systems than H2 molecule
 - [ ] Add more tests

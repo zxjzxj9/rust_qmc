@@ -6,7 +6,8 @@ mod tests {
     use na::{Vector3};
     use rand::distributions::Uniform;
     use rand_distr::{Distribution, Normal};
-    use crate::h2_mol::{Jastrow1, MultiWfn, H2MoleculeVB, Slater1s};
+    use crate::h2_mol::{Jastrow1, H2MoleculeVB, Slater1s};
+    use crate::wfn::{MultiWfn, SingleWfn};
 
     #[test]
     fn test_jastrow1_evaluate() {

@@ -2,6 +2,8 @@ mod h2_mol;
 mod mcmc;
 mod conf;
 mod tests;
+mod wfn;
+mod sto;
 
 use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};

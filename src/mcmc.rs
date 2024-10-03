@@ -2,7 +2,8 @@ use nalgebra::Vector3;
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use std::f64;
-use crate::h2_mol::MultiWfn;
+use crate::wfn::{MultiWfn, SingleWfn};
+
 
 #[derive(Copy, Clone)]
 pub struct MCMCParams {
