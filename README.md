@@ -16,9 +16,11 @@ The values are obtained using the VMC method with $2\times10^6$ samples.
 
 | Basis | $\alpha$ | $F$ | Binding Energy / eV |
 |-------|----------|-----|---------------------|
-| N/A   | 0.6      | 0.0 | -2.932              |
-| VB    | 0.6      | 5.0 | -4.81               |
-| LCAO  | 0.7      | 5.0 | -5.18               |
+| VB    | 0.6      | 0.0 | -2.932              |
+| VB    | 0.7      | 5.0 | -4.136              |
+| LCAO  | 1.2      | 0.0 | -3.488              |
+| LCAO  | 1.3      | 3.0 | -4.287              |
+
 
 ## Todos
 

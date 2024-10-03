@@ -10,7 +10,7 @@
 
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
-use crate::h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
+use crate::h2_mol::{H2MoleculeVB, H2MoleculeMO, Slater1s, Jastrow1};
 
 /// write function to serialize H2MoleculeVB and deserialize H2MoleculeVB, with ymal format
 pub fn read_h2molecule_vb(filename: &str) -> H2MoleculeVB {
@@ -20,6 +20,13 @@ pub fn read_h2molecule_vb(filename: &str) -> H2MoleculeVB {
     h2
 }
 
+/// write function to serialize H2MoleculeMO and deserialize H2MoleculeVB, with ymal format
+pub fn read_h2molecule_mo(filename: &str) -> H2MoleculeMO {
+    let file = std::fs::File::open(filename).unwrap();
+    let reader = std::io::BufReader::new(file);
+    let h2: H2MoleculeMO = serde_yaml::from_reader(reader).unwrap();
+    h2
+}
 // example of ymal file
 // H1:
 //   alpha: 1.0

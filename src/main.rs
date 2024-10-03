@@ -26,7 +26,9 @@ fn main() {
 
     // read the config file, with command line argument, use clap mod to input the file name
     let args = Args::parse();
-    let h2 = conf::read_h2molecule_vb(&args.config);
+    // let h2 = conf::read_h2molecule_vb(&args.config);
+    let h2 = conf::read_h2molecule_mo(&args.config);
+
 
     // Set up MCMC parameters
     let params = MCMCParams {

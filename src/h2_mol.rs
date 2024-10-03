@@ -264,13 +264,13 @@ impl MultiWfn for H2MoleculeVB {
 
         // Derivative and Laplacian of J
         let j_derivative = self.J.derivative(r); // Vec<Vector3<f64>>
-        let j_laplacian: f64 = self.J.laplacian(r).into_iter().sum();   // f64
+        let j_laplacian = self.J.laplacian(r);   // f64
 
         // Compute Laplacian contributions
         let laplacian_0 = psi_2
-            * (psi_1_laplacian * j + 2.0 * psi_1_derivative.dot(&j_derivative[0]) + psi_1 * j_laplacian);
+            * (psi_1_laplacian * j + 2.0 * psi_1_derivative.dot(&j_derivative[0]) + psi_1 * j_laplacian[0]);
         let laplacian_1 = psi_1
-            * (psi_2_laplacian * j + 2.0 * psi_2_derivative.dot(&j_derivative[1]) + psi_2 * j_laplacian);
+            * (psi_2_laplacian * j + 2.0 * psi_2_derivative.dot(&j_derivative[1]) + psi_2 * j_laplacian[1]);
 
         vec![laplacian_0, laplacian_1]
     }
@@ -346,7 +346,25 @@ impl EnergyCalculator for H2MoleculeVB {
         let kinetic = -0.5 * lap / psi;
         let potential = 1.0 / r12_norm
             - 1.0 / (r1 - self.H1.R).norm() - 1.0 / (r2 - self.H2.R).norm()
-            - 1.0 / (r1 - self.H2.R).norm() - 1.0 / (r1 - self.H2.R).norm()
+            - 1.0 / (r1 - self.H2.R).norm() - 1.0 / (r2 - self.H1.R).norm()
+            + 1.0 / (self.H1.R - self.H2.R).norm();
+        kinetic + potential
+    }
+}
+
+impl EnergyCalculator for H2MoleculeMO {
+    fn local_energy(&self, positions: &Vec<Vector3<f64>>) -> f64 {
+        let r1 = &positions[0];
+        let r2 = &positions[1];
+        let r12 = r1 - r2;
+        let r12_norm = r12.norm();
+        let psi = self.evaluate(positions);
+        let lap: f64 = self.laplacian(positions).into_iter().sum();
+
+        let kinetic = -0.5 * lap / psi;
+        let potential = 1.0 / r12_norm
+            - 1.0 / (r1 - self.H1.R).norm() - 1.0 / (r2 - self.H2.R).norm()
+            - 1.0 / (r1 - self.H2.R).norm() - 1.0 / (r2 - self.H1.R).norm()
             + 1.0 / (self.H1.R - self.H2.R).norm();
         kinetic + potential
     }

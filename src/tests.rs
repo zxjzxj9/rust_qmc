@@ -100,9 +100,9 @@ mod tests {
     #[test]
     fn test_h2molecule_numerical_derivative_and_laplacian() {
         let h2 = H2MoleculeVB {
-            H1: Slater1s { R: Vector3::new(0.0, 0.0, 0.0), alpha: 1.0 },
-            H2: Slater1s { R: Vector3::new(1.0, 0.0, 0.0), alpha: 1.0 },
-            J: Jastrow1 { F: 1.0 },
+            H1: Slater1s { R: Vector3::new(0.0, 0.0, 0.0), alpha: 0.6 },
+            H2: Slater1s { R: Vector3::new(1.0, 0.0, 0.0), alpha: 0.6 },
+            J: Jastrow1 { F: 5.0 },
         };
         let h = 1e-5;
 
@@ -129,7 +129,7 @@ mod tests {
         let numerical_laplacian = h2.numerical_laplacian(&r, h);
 
         for i in 0..r.len() {
-            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-3);
+            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
         }
     }
 }
