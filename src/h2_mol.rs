@@ -19,7 +19,7 @@ pub trait MultiWfn {
     fn initialize(&self) -> Vec<Vector3<f64>>;
     fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64;
     fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>>;
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> f64;
+    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64>;
 
     fn numerical_derivative(&self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<Vector3<f64>> {
         let mut grad = vec![Vector3::zeros(); r.len()];
@@ -46,8 +46,8 @@ pub trait MultiWfn {
         grad
     }
 
-    fn numerical_laplacian(&self, r: &Vec<Vector3<f64>>, h: f64) -> f64 {
-        let mut laplacian = 0.0;
+    fn numerical_laplacian(&self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<f64> {
+        let mut laplacian = vec![0.0; r.len()];
 
         for (i, _) in r.iter().enumerate() {
             for axis in 0..3 {
@@ -63,7 +63,7 @@ pub trait MultiWfn {
 
                 let second_derivative = (psi_forward - 2.0 * psi + psi_backward) / (h * h);
 
-                laplacian += second_derivative;
+                laplacian[i] += second_derivative;
             }
         }
 
@@ -152,18 +152,21 @@ impl MultiWfn for Jastrow1 {
     }
 
     /// Computes the Laplacian (second derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> f64 {
+    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         let r1 = &r[0];
         let r2 = &r[1];
         let r12 = r1 - r2;
         let r12_norm = r12.norm();
+        let factor = (1.0 + r12_norm / self.F);
         let psi = self.evaluate(r);
-        let denom = 2.0 * (1.0 + r12_norm / self.F).powi(2) * r12_norm;
-        let grad_factor = psi / denom;
-        let grad_square = 1.0 * (grad_factor * r12_norm).powi(2);
-        let laplacian_factor = 1.0 / (r12_norm * (1.0 + r12_norm / self.F).powi(3));
-
-        2.0 * (grad_square + laplacian_factor) * psi
+        let denom = 2.0 * factor.powi(2);
+        let grad_square = denom.powi(-2);
+        let laplacian_factor = 1.0 / (r12_norm * factor.powi(3));
+        let comp = (grad_square + laplacian_factor) * psi ;
+        vec![
+            comp,
+            comp
+        ]
     }
 }
 
@@ -225,7 +228,7 @@ impl MultiWfn for H2MoleculeVB {
     }
 
 
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> f64 {
+    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         // Evaluate psi_1 and psi_2
         let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
@@ -261,7 +264,7 @@ impl MultiWfn for H2MoleculeVB {
 
         // Derivative and Laplacian of J
         let j_derivative = self.J.derivative(r); // Vec<Vector3<f64>>
-        let j_laplacian = self.J.laplacian(r);   // f64
+        let j_laplacian: f64 = self.J.laplacian(r).into_iter().sum();   // f64
 
         // Compute Laplacian contributions
         let laplacian_0 = psi_2
@@ -269,7 +272,65 @@ impl MultiWfn for H2MoleculeVB {
         let laplacian_1 = psi_1
             * (psi_2_laplacian * j + 2.0 * psi_2_derivative.dot(&j_derivative[1]) + psi_2 * j_laplacian);
 
-        laplacian_0 + laplacian_1
+        vec![laplacian_0, laplacian_1]
+    }
+}
+
+impl MultiWfn for H2MoleculeMO {
+    fn initialize(&self) -> Vec<Vector3<f64>> {
+        self.J.initialize()
+    }
+    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
+        let psi_1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
+        let psi_2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
+        let j = self.J.evaluate(r);
+        psi_1 * psi_2 * j
+    }
+
+    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+        let psi_sum_r1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
+        let psi_sum_r2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
+
+        let grad_psi_sum_r1 = self.H1.derivative(&r[0]) + self.H2.derivative(&r[0]);
+        let grad_psi_sum_r2 = self.H1.derivative(&r[1]) + self.H2.derivative(&r[1]);
+
+        let j = self.J.evaluate(r);
+        let grad_j = self.J.derivative(r);
+
+        let grad_psi_r1 = (grad_psi_sum_r1 * psi_sum_r2 * j) + (psi_sum_r1 * psi_sum_r2 * grad_j[0]);
+        let grad_psi_r2 = (grad_psi_sum_r2 * psi_sum_r1 * j) + (psi_sum_r1 * psi_sum_r2 * grad_j[1]);
+
+        vec![grad_psi_r1, grad_psi_r2]
+    }
+
+
+    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+        let psi_sum_r1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
+        let psi_sum_r2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
+
+        let grad_psi_sum_r1 = self.H1.derivative(&r[0]) + self.H2.derivative(&r[0]);
+        let grad_psi_sum_r2 = self.H1.derivative(&r[1]) + self.H2.derivative(&r[1]);
+
+        let laplacian_psi_sum_r1 = self.H1.laplacian(&r[0]) + self.H2.laplacian(&r[0]);
+        let laplacian_psi_sum_r2 = self.H1.laplacian(&r[1]) + self.H2.laplacian(&r[1]);
+
+        let j = self.J.evaluate(r);
+        let grad_j = self.J.derivative(r);
+        let j_laplacian = self.J.laplacian(r);
+
+        let laplacian_j_r1 = j_laplacian[0];
+        let laplacian_j_r2 = j_laplacian[1];
+
+        let delta0_psi = laplacian_psi_sum_r1 * psi_sum_r2 * j
+            + 2.0 * grad_psi_sum_r1.dot(&grad_j[0]) * psi_sum_r2
+            + psi_sum_r1 * psi_sum_r2 * laplacian_j_r1;
+
+        let delta1_psi = laplacian_psi_sum_r2 * psi_sum_r1 * j
+            + 2.0 * grad_psi_sum_r2.dot(&grad_j[1]) * psi_sum_r1
+            + psi_sum_r1 * psi_sum_r2 * laplacian_j_r2;
+
+        // Total Laplacian
+        vec![delta0_psi, delta1_psi]
     }
 }
 
@@ -280,7 +341,7 @@ impl EnergyCalculator for H2MoleculeVB {
         let r12 = r1 - r2;
         let r12_norm = r12.norm();
         let psi = self.evaluate(positions);
-        let lap = self.laplacian(positions);
+        let lap: f64 = self.laplacian(positions).into_iter().sum();
 
         let kinetic = -0.5 * lap / psi;
         let potential = 1.0 / r12_norm

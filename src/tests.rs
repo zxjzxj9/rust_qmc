@@ -92,7 +92,9 @@ mod tests {
         let analytical_laplacian = jastrow.laplacian(&r);
         let numerical_laplacian = jastrow.numerical_laplacian(&r, h);
 
-        assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-2);
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-3);
+        }
     }
 
     #[test]
@@ -126,6 +128,8 @@ mod tests {
         let analytical_laplacian = h2.laplacian(&r);
         let numerical_laplacian = h2.numerical_laplacian(&r, h);
 
-        assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-3);
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-3);
+        }
     }
 }
