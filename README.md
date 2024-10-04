@@ -21,6 +21,14 @@ The values are obtained using the VMC method with $2\times10^6$ samples.
 | LCAO  | 1.2      | 0.0 | -3.488              |
 | LCAO  | 1.3      | 3.0 | -4.287              |
 
+## Li Basis function
+The basis function for the Li atom is given by:
+
+$\psi_n(r) = A \sum_{\nu=1}^{m} \phi_{\nu n} r^{p_{\nu}} \exp\left(-\xi_n r\right)$
+
+with the following coefficients:
+A = 
+
 
 ## ToDos
 
