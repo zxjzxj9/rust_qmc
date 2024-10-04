@@ -8,6 +8,7 @@ mod tests {
     use rand_distr::{Distribution, Normal};
     use crate::h2_mol::{Jastrow1, H2MoleculeVB, Slater1s};
     use crate::wfn::{MultiWfn, SingleWfn};
+    use crate::sto::{STO, init_li_sto};
 
     #[test]
     fn test_jastrow1_evaluate() {
@@ -132,5 +133,30 @@ mod tests {
         for i in 0..r.len() {
             assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
         }
+    }
+
+    #[test]
+    fn test_sto_numerical_derivative_and_laplacian() {
+        let sto = init_li_sto(Vector3::new(1.0, 0.0, 0.0), 1, 0, 0);
+        let h = 1e-5;
+
+        // define a normal distribution
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+
+        // test with random positions between [-1, 1]
+        let r = Vector3::<f64>::from_distribution(&dist, &mut rng);
+
+        let analytical_grad = sto.derivative(&r);
+        let numerical_grad = sto.numerical_derivative(&r, h);
+
+        assert_relative_eq!(analytical_grad.x, numerical_grad.x, epsilon = 1e-5);
+        assert_relative_eq!(analytical_grad.y, numerical_grad.y, epsilon = 1e-5);
+        assert_relative_eq!(analytical_grad.z, numerical_grad.z, epsilon = 1e-5);
+
+        let analytical_laplacian = sto.laplacian(&r);
+        let numerical_laplacian = sto.numerical_laplacian(&r, h);
+
+        assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-5);
     }
 }
