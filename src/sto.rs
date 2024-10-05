@@ -94,3 +94,12 @@ impl SingleWfn for STO {
         laplacian
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct STOSlaterDet {
+    // slater determinant for STO
+    pub(crate) n: i32,
+    pub(crate) sto: Vec<STO>,
+    pub(crate) spin: Vec<i32>,
+}
+
