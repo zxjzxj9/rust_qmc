@@ -85,10 +85,11 @@ impl SingleWfn for STO {
             let s_p_minus1 = s_p / s; // s^{p_nu - 1}
             let s_p_minus2 = s_p_minus1 / s; // s^{p_nu - 2}
 
-            let laplacian_term = zeta_nu * zeta_nu * s_p
+            let grad2_term = zeta_nu * zeta_nu * s_p
                 - 2.0 * zeta_nu * p_nu * s_p_minus1
                 + p_nu * (p_nu - 1.0) * s_p_minus2;
-            laplacian += phi_nu * exp_factor * laplacian_term;
+            let grad_term = 2.0*(-zeta_nu * s_p + p_nu * s_p_minus1)/dist;
+            laplacian += phi_nu * exp_factor * (grad2_term + grad_term);
         }
         laplacian
     }
