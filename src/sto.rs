@@ -1,6 +1,7 @@
 use nalgebra::Vector3;
+use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
-use crate::wfn::SingleWfn;
+use crate::wfn::{MultiWfn, SingleWfn};
 
 // \psi_n(r) = A \sum_{\nu=1}^{m} \phi_{\nu n} r^{p_{\nu}} \exp\left(-\xi_n r\right)
 #[derive(Serialize, Deserialize, Debug)]
@@ -103,3 +104,37 @@ pub(crate) struct STOSlaterDet {
     pub(crate) spin: Vec<i32>,
 }
 
+impl MultiWfn for STOSlaterDet {
+    fn initialize(&self) -> Vec<Vector3<f64>> {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+        // initialize random positions, self.n is the number of electrons
+        let mut r = vec![];
+        for _ in 0..self.n {
+            r.push(Vector3::<f64>::from_distribution(&dist, &mut rng));
+        }
+        r
+    }
+
+    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
+        // evaluate the slater determinant
+        let mut psi = 0.0;
+        0.0
+    }
+
+    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+        let mut derivative = vec![Vector3::zeros(); r.len()];
+        for i in 0..self.n as usize {
+            derivative[i] = self.sto[i].derivative(&r[i]);
+        }
+        derivative
+    }
+
+    fn laplacian(&self, r: &Vec<Vector3<f64>) -> Vec<f64> {
+        let mut laplacian = vec![0.0; r.len()];
+        for i in 0..self.n as usize {
+            laplacian[i] = self.sto[i].laplacian(&r[i]);
+        }
+        laplacian
+    }
+}

@@ -125,6 +125,7 @@ impl MultiWfn for H2MoleculeVB {
     fn initialize(&self) -> Vec<Vector3<f64>> {
         self.J.initialize()
     }
+
     fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
         let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
