@@ -130,7 +130,7 @@ impl MultiWfn for STOSlaterDet {
         derivative
     }
 
-    fn laplacian(&self, r: &Vec<Vector3<f64>) -> Vec<f64> {
+    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         let mut laplacian = vec![0.0; r.len()];
         for i in 0..self.n as usize {
             laplacian[i] = self.sto[i].laplacian(&r[i]);
