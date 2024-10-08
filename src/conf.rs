@@ -27,6 +27,7 @@ pub fn read_h2molecule_mo(filename: &str) -> H2MoleculeMO {
     let h2: H2MoleculeMO = serde_yaml::from_reader(reader).unwrap();
     h2
 }
+
 // example of ymal file
 // H1:
 //   alpha: 1.0
