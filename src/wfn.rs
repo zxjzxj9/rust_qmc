@@ -2,11 +2,11 @@ use nalgebra::Vector3;
 
 // single center wave function
 pub trait SingleWfn {
-    fn evaluate(&self, r: &Vector3<f64>) -> f64;
-    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64>;
-    fn laplacian(&self, r: &Vector3<f64>) -> f64;
+    fn evaluate(&mut self, r: &Vector3<f64>) -> f64;
+    fn derivative(&mut self, r: &Vector3<f64>) -> Vector3<f64>;
+    fn laplacian(&mut self, r: &Vector3<f64>) -> f64;
 
-    fn numerical_derivative(&self, r: &Vector3<f64>, h: f64) -> Vector3<f64> {
+    fn numerical_derivative(&mut self, r: &Vector3<f64>, h: f64) -> Vector3<f64> {
         let mut grad = Vector3::zeros();
 
         for axis in 0..3 {
@@ -25,7 +25,7 @@ pub trait SingleWfn {
         grad
     }
 
-    fn numerical_laplacian(&self, r: &Vector3<f64>, h: f64) -> f64 {
+    fn numerical_laplacian(&mut self, r: &Vector3<f64>, h: f64) -> f64 {
         let mut laplacian = 0.0;
 
         for axis in 0..3 {
@@ -50,12 +50,12 @@ pub trait SingleWfn {
 
 // multi center wave function, input is a vector of vec3 coords
 pub trait MultiWfn {
-    fn initialize(&self) -> Vec<Vector3<f64>>;
-    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64;
-    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>>;
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64>;
+    fn initialize(&mut self) -> Vec<Vector3<f64>>;
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64;
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>>;
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64>;
 
-    fn numerical_derivative(&self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<Vector3<f64>> {
+    fn numerical_derivative(&mut self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<Vector3<f64>> {
         let mut grad = vec![Vector3::zeros(); r.len()];
 
         for (i, _) in r.iter().enumerate() {
@@ -80,7 +80,7 @@ pub trait MultiWfn {
         grad
     }
 
-    fn numerical_laplacian(&self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<f64> {
+    fn numerical_laplacian(&mut self, r: &Vec<Vector3<f64>>, h: f64) -> Vec<f64> {
         let mut laplacian = vec![0.0; r.len()];
 
         for (i, _) in r.iter().enumerate() {

@@ -1,4 +1,4 @@
-use nalgebra::Vector3;
+use nalgebra::{DMatrix, Matrix, Vector3};
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
 use crate::wfn::{MultiWfn, SingleWfn};
@@ -43,7 +43,7 @@ pub(crate) fn init_li_sto(r: Vector3<f64>, n: i32, l: i32, m: i32) -> STO {
 }
 
 impl SingleWfn for STO {
-    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
+    fn evaluate(&mut self, r: &Vector3<f64>) -> f64 {
         let mut psi = 0.0;
         let dist = (r - self.R).norm();
         for nu in 0..self.m {
@@ -52,7 +52,7 @@ impl SingleWfn for STO {
         psi
     }
 
-    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64> {
+    fn derivative(&mut self, r: &Vector3<f64>) -> Vector3<f64> {
         let dist = (r - self.R).norm();
         let grad_dir = (r - self.R) / dist; // Unit vector in the radial direction
         let mut derivative = Vector3::zeros();
@@ -72,7 +72,7 @@ impl SingleWfn for STO {
         derivative
     }
 
-    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+    fn laplacian(&mut self, r: &Vector3<f64>) -> f64 {
         let dist = (r - self.R).norm();
         let s = dist;
         let mut laplacian = 0.0;
@@ -89,7 +89,7 @@ impl SingleWfn for STO {
             let grad2_term = zeta_nu * zeta_nu * s_p
                 - 2.0 * zeta_nu * p_nu * s_p_minus1
                 + p_nu * (p_nu - 1.0) * s_p_minus2;
-            let grad_term = 2.0*(-zeta_nu * s_p + p_nu * s_p_minus1)/dist;
+            let grad_term = 2.0 * (-zeta_nu * s_p + p_nu * s_p_minus1) / dist;
             laplacian += phi_nu * exp_factor * (grad2_term + grad_term);
         }
         laplacian
@@ -99,13 +99,31 @@ impl SingleWfn for STO {
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct STOSlaterDet {
     // slater determinant for STO
-    pub(crate) n: i32,
+    pub(crate) n: usize,
     pub(crate) sto: Vec<STO>,
     pub(crate) spin: Vec<i32>,
+    pub(crate) s: DMatrix<f64>,
+    pub(crate) inv_s: DMatrix<f64>,
+}
+
+
+impl STOSlaterDet {
+    pub fn init_wfn(&mut self, r: Vec<Vector3<f64>>) -> &Self {
+        self.s = DMatrix::zeros(self.n, self.n);
+        for i in 0..self.n {
+            for j in 0..self.n {
+                self.s[(i, j)] = self.sto[i].evaluate(&r[j]);
+            }
+        }
+        // calculate inverse of self.s
+        self.inv_s = self.s.clone().try_inverse().unwrap();
+        self
+    }
 }
 
 impl MultiWfn for STOSlaterDet {
-    fn initialize(&self) -> Vec<Vector3<f64>> {
+    // initialize the STO slater determinant
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, 1.0).unwrap();
         // initialize random positions, self.n is the number of electrons
@@ -116,24 +134,60 @@ impl MultiWfn for STOSlaterDet {
         r
     }
 
-    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
-        // evaluate the slater determinant
-        let mut psi = 0.0;
-        0.0
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
+        // Update the Slater matrix
+        for i in 0..self.n {
+            for j in 0..self.n {
+                self.s[(i, j)] = self.sto[j].evaluate(&r[i]);
+            }
+        }
+        // Calculate the determinant
+        let psi = self.s.determinant();
+        // Update the inverse of the Slater matrix
+        self.inv_s = self.s.clone().try_inverse().unwrap();
+        psi
     }
 
-    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+        // Compute the derivative of the Slater determinant
+        let psi = self.evaluate(r);
         let mut derivative = vec![Vector3::zeros(); r.len()];
-        for i in 0..self.n as usize {
-            derivative[i] = self.sto[i].derivative(&r[i]);
+        for k in 0..self.n {
+            let mut sum = Vector3::zeros();
+            for j in 0..self.n {
+                let grad_phi = self.sto[j].derivative(&r[k]);
+                sum += self.inv_s[(k, j)] * grad_phi;
+            }
+            derivative[k] = psi * sum;
         }
         derivative
     }
 
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+        // Compute the Laplacian of the Slater determinant
+        let psi = self.evaluate(r);
         let mut laplacian = vec![0.0; r.len()];
-        for i in 0..self.n as usize {
-            laplacian[i] = self.sto[i].laplacian(&r[i]);
+        // Precompute gradients and Laplacians of orbitals
+        let mut grad_phi = vec![vec![Vector3::zeros(); self.n]; self.n];
+        let mut lap_phi = vec![vec![0.0; self.n]; self.n];
+        for k in 0..self.n {
+            for j in 0..self.n {
+                grad_phi[k][j] = self.sto[j].derivative(&r[k]);
+                lap_phi[k][j] = self.sto[j].laplacian(&r[k]);
+            }
+        }
+        for k in 0..self.n {
+            let mut sum_lap = 0.0;
+            for j in 0..self.n {
+                sum_lap += self.inv_s[(k, j)] * lap_phi[k][j];
+            }
+            let mut sum_grad_dot = 0.0;
+            for i in 0..self.n {
+                for j in 0..self.n {
+                    sum_grad_dot += self.inv_s[(k, i)] * self.inv_s[(k, j)] * grad_phi[k][i].dot(&grad_phi[k][j]);
+                }
+            }
+            laplacian[k] = psi * (sum_lap + sum_grad_dot);
         }
         laplacian
     }

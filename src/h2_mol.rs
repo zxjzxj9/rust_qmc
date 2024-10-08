@@ -16,14 +16,14 @@ pub(crate) struct Slater1s {
 
 impl SingleWfn for Slater1s {
     /// Evaluates the Slater 1s wavefunction at position `r`.
-    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
+    fn evaluate(&mut self, r: &Vector3<f64>) -> f64 {
         let r_minus_R = r - self.R;
         let r_norm = r_minus_R.norm();
         (-self.alpha * r_norm).exp()
     }
 
     /// Computes the gradient (first derivative) of the Slater 1s wavefunction at position `r`.
-    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64> {
+    fn derivative(&mut self, r: &Vector3<f64>) -> Vector3<f64> {
         let r_minus_R = r - self.R;
         let r_norm = r_minus_R.norm();
         if r_norm == 0.0 {
@@ -34,7 +34,7 @@ impl SingleWfn for Slater1s {
     }
 
     /// Computes the Laplacian (second derivative) of the Slater 1s wavefunction at position `r`.
-    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+    fn laplacian(&mut self, r: &Vector3<f64>) -> f64 {
         let r_minus_R = r - self.R;
         let r_norm = r_minus_R.norm();
         if r_norm == 0.0 {
@@ -54,7 +54,7 @@ pub(crate) struct Jastrow1 {
 impl MultiWfn for Jastrow1 {
 
     /// Initializes the Jastrow 1 wavefunction by sampling two random positions from a normal distribution.
-    fn initialize(&self) -> Vec<Vector3<f64>> {
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, 1.0).unwrap();
         vec![
@@ -64,7 +64,7 @@ impl MultiWfn for Jastrow1 {
     }
 
     /// Evaluates the Jastrow 1 wavefunction at positions `r`.
-    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
         let r1 = &r[0];
         let r2 = &r[1];
         let r12 = r1 - r2;
@@ -73,7 +73,7 @@ impl MultiWfn for Jastrow1 {
     }
 
     /// Computes the gradient (first derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
         let r1 = &r[0];
         let r2 = &r[1];
         let r12 = r1 - r2;
@@ -89,7 +89,7 @@ impl MultiWfn for Jastrow1 {
     }
 
     /// Computes the Laplacian (second derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         let r1 = &r[0];
         let r2 = &r[1];
         let r12 = r1 - r2;
@@ -122,18 +122,18 @@ pub(crate) struct H2MoleculeMO {
 }
 
 impl MultiWfn for H2MoleculeVB {
-    fn initialize(&self) -> Vec<Vector3<f64>> {
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
         self.J.initialize()
     }
 
-    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
         let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
         let j = self.J.evaluate(r);
         psi_1 * psi_2 * j
     }
 
-    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
         // Evaluate psi_1 and psi_2
         let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
@@ -166,7 +166,7 @@ impl MultiWfn for H2MoleculeVB {
     }
 
 
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         // Evaluate psi_1 and psi_2
         let psi_1 = self.H1.evaluate(&r[0]) * self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) * self.H2.evaluate(&r[1]);
@@ -215,17 +215,17 @@ impl MultiWfn for H2MoleculeVB {
 }
 
 impl MultiWfn for H2MoleculeMO {
-    fn initialize(&self) -> Vec<Vector3<f64>> {
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
         self.J.initialize()
     }
-    fn evaluate(&self, r: &Vec<Vector3<f64>>) -> f64 {
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
         let psi_1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
         let psi_2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
         let j = self.J.evaluate(r);
         psi_1 * psi_2 * j
     }
 
-    fn derivative(&self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
         let psi_sum_r1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
         let psi_sum_r2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
 
@@ -242,7 +242,7 @@ impl MultiWfn for H2MoleculeMO {
     }
 
 
-    fn laplacian(&self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         let psi_sum_r1 = self.H1.evaluate(&r[0]) + self.H2.evaluate(&r[0]);
         let psi_sum_r2 = self.H1.evaluate(&r[1]) + self.H2.evaluate(&r[1]);
 
@@ -273,7 +273,7 @@ impl MultiWfn for H2MoleculeMO {
 }
 
 impl EnergyCalculator for H2MoleculeVB {
-    fn local_energy(&self, positions: &Vec<Vector3<f64>>) -> f64 {
+    fn local_energy(&mut self, positions: &Vec<Vector3<f64>>) -> f64 {
         let r1 = &positions[0];
         let r2 = &positions[1];
         let r12 = r1 - r2;
@@ -291,7 +291,7 @@ impl EnergyCalculator for H2MoleculeVB {
 }
 
 impl EnergyCalculator for H2MoleculeMO {
-    fn local_energy(&self, positions: &Vec<Vector3<f64>>) -> f64 {
+    fn local_energy(&mut self, positions: &Vec<Vector3<f64>>) -> f64 {
         let r1 = &positions[0];
         let r2 = &positions[1];
         let r12 = r1 - r2;

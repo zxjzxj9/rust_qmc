@@ -29,7 +29,7 @@ pub struct MCMCResults {
 }
 
 pub trait EnergyCalculator {
-    fn local_energy(&self, positions: &Vec<Vector3<f64>>) -> f64;
+    fn local_energy(&mut self, positions: &Vec<Vector3<f64>>) -> f64;
 }
 
 pub struct MCMCSimulation<T: MultiWfn + EnergyCalculator> {
@@ -49,7 +49,7 @@ impl<T: MultiWfn + EnergyCalculator> MCMCSimulation<T> {
         }
     }
 
-    pub fn initialize(&self) -> Vec<MCMCState> {
+    pub fn initialize(&mut self) -> Vec<MCMCState> {
         let mut states = Vec::with_capacity(self.params.n_walkers);
         for _ in 0..self.params.n_walkers {
             let positions = self.generate_random_positions();
@@ -60,7 +60,7 @@ impl<T: MultiWfn + EnergyCalculator> MCMCSimulation<T> {
         states
     }
 
-    fn generate_random_positions(&self) -> Vec<Vector3<f64>> {
+    fn generate_random_positions(&mut self) -> Vec<Vector3<f64>> {
         // Implement based on your system's requirements
         self.wavefunction.initialize()
     }

@@ -12,7 +12,7 @@ mod tests {
 
     #[test]
     fn test_jastrow1_evaluate() {
-        let jastrow = Jastrow1 { F: 1.0 };
+        let mut jastrow = Jastrow1 { F: 1.0 };
         let r = vec![
             Vector3::new(0.0, 0.0, 0.0),
             Vector3::new(1.0, 0.0, 0.0),
@@ -23,7 +23,7 @@ mod tests {
 
     #[test]
     fn test_jastrow1_derivative() {
-        let jastrow = Jastrow1 { F: 1.0 };
+        let mut jastrow = Jastrow1 { F: 1.0 };
         let r = vec![
             Vector3::new(0.0, 0.0, 0.0),
             Vector3::new(1.0, 0.0, 0.0),
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn test_jastrow1_laplacian() {
-        let jastrow = Jastrow1 { F: 1.0 };
+        let mut jastrow = Jastrow1 { F: 1.0 };
         let r = vec![
             Vector3::new(0.0, 0.0, 0.0),
             Vector3::new(1.0, 0.0, 0.0),
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn test_jastrow1_consistency() {
-        let jastrow = Jastrow1 { F: 1.0 };
+        let mut jastrow = Jastrow1 { F: 1.0 };
         let r = vec![
             Vector3::new(0.5, 0.5, 0.5),
             Vector3::new(-0.5, -0.5, -0.5),
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn test_jastrow1_numerical_derivative_and_laplacian() {
-        let jastrow = Jastrow1 { F: 1.0 };
+        let mut jastrow = Jastrow1 { F: 1.0 };
         let h = 1e-5;
 
         // define a normal distribution
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_h2molecule_numerical_derivative_and_laplacian() {
-        let h2 = H2MoleculeVB {
+        let mut h2 = H2MoleculeVB {
             H1: Slater1s { R: Vector3::new(0.0, 0.0, 0.0), alpha: 0.6 },
             H2: Slater1s { R: Vector3::new(1.0, 0.0, 0.0), alpha: 0.6 },
             J: Jastrow1 { F: 5.0 },
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_sto_numerical_derivative_and_laplacian() {
-        let sto = init_li_sto(Vector3::new(1.0, 0.0, 0.0), 1, 0, 0);
+        let mut sto = init_li_sto(Vector3::new(1.0, 0.0, 0.0), 1, 0, 0);
         let h = 1e-5;
 
         // define a normal distribution
@@ -159,4 +159,10 @@ mod tests {
 
         assert_relative_eq!(analytical_laplacian, numerical_laplacian, epsilon = 1e-5);
     }
+
+    #[test]
+    fn test_lithium_numerical_derivative_and_laplacian() {
+
+    }
+
 }
