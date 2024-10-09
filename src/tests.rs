@@ -8,7 +8,7 @@ mod tests {
     use rand_distr::{Distribution, Normal};
     use crate::h2_mol::{Jastrow1, H2MoleculeVB, Slater1s};
     use crate::wfn::{MultiWfn, SingleWfn};
-    use crate::sto::{STO, init_li_sto};
+    use crate::sto::{STO, STOSlaterDet, init_li_sto};
 
     #[test]
     fn test_jastrow1_evaluate() {
@@ -162,7 +162,19 @@ mod tests {
 
     #[test]
     fn test_lithium_numerical_derivative_and_laplacian() {
+        let mut sto1 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 1, 0, 0);
+        let mut sto2 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 1, 0, 0);
+        let mut sto3 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 2, 0, 0);
+        let mut stodet = STOSlaterDet {
+            n: 3,
+            sto: vec![sto1, sto2, sto3],
+            spin: vec![1, -1, 1],
+            s: Default::default(),
+            inv_s: Default::default(),
+        };
+        let h = 1e-5;
 
+        let r = stodet.initialize();
     }
 
 }
