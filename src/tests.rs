@@ -175,6 +175,23 @@ mod tests {
         let h = 1e-5;
 
         let r = stodet.initialize();
+        // evaluate numerical derivative and laplacian
+        let analytical_grad = stodet.derivative(&r);
+        let numerical_grad = stodet.numerical_derivative(&r, h);
+        // assert they are close enough
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_grad[i].x, numerical_grad[i].x, epsilon = 1e-5);
+            assert_relative_eq!(analytical_grad[i].y, numerical_grad[i].y, epsilon = 1e-5);
+            assert_relative_eq!(analytical_grad[i].z, numerical_grad[i].z, epsilon = 1e-5);
+        }
+
+        // evaluate numerical laplacian
+        // let analytical_laplacian = stodet.laplacian(&r);
+        // let numerical_laplacian = stodet.numerical_laplacian(&r, h);
+        // // assert they are close enough
+        // for i in 0..r.len() {
+        //     assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
+        // }
     }
 
 }
