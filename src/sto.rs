@@ -136,6 +136,7 @@ impl MultiWfn for STOSlaterDet {
 
     fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
         // Update the Slater matrix
+        self.s = DMatrix::zeros(self.n, self.n);
         for i in 0..self.n {
             for j in 0..self.n {
                 self.s[(i, j)] = self.sto[j].evaluate(&r[i]);
