@@ -140,10 +140,12 @@ impl MultiWfn for STOSlaterDet {
         for i in 0..self.n {
             for j in 0..self.n {
                 self.s[(i, j)] = self.sto[j].evaluate(&r[i]);
+                println!("s[{}, {}] = {}", i, j, self.s[(i, j)]);
             }
         }
         // Calculate the determinant
         let psi = self.s.determinant();
+        println!("psi = {}", psi);
         // Update the inverse of the Slater matrix
         self.inv_s = self.s.clone().try_inverse().unwrap();
         psi
