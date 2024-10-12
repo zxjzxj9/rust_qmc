@@ -168,8 +168,6 @@ impl MultiWfn for STOSlaterDet {
                 if self.spin[i] == self.spin[j] {
                     let grad_phi = self.sto[j].derivative(&r[i]);
                     sum += self.inv_s[(i, j)] * grad_phi;
-                } else {
-                    self.s[(i, j)] = 0.0;
                 }
             }
             derivative[i] = psi * sum;
@@ -184,24 +182,26 @@ impl MultiWfn for STOSlaterDet {
         // Precompute gradients and Laplacians of orbitals
         let mut grad_phi = vec![vec![Vector3::zeros(); self.n]; self.n];
         let mut lap_phi = vec![vec![0.0; self.n]; self.n];
-        for k in 0..self.n {
+        for i in 0..self.n {
             for j in 0..self.n {
-                grad_phi[k][j] = self.sto[j].derivative(&r[k]);
-                lap_phi[k][j] = self.sto[j].laplacian(&r[k]);
+                if self.spin[i] == self.spin[j] {
+                    grad_phi[i][j] = self.sto[j].derivative(&r[i]);
+                    lap_phi[i][j] = self.sto[j].laplacian(&r[i]);
+                }
             }
         }
-        for k in 0..self.n {
+        for i in 0..self.n {
             let mut sum_lap = 0.0;
             for j in 0..self.n {
-                sum_lap += self.inv_s[(k, j)] * lap_phi[k][j];
+                sum_lap += self.inv_s[(i, j)] * lap_phi[i][j];
             }
             let mut sum_grad_dot = 0.0;
             for i in 0..self.n {
                 for j in 0..self.n {
-                    sum_grad_dot += self.inv_s[(k, i)] * self.inv_s[(k, j)] * grad_phi[k][i].dot(&grad_phi[k][j]);
+                    sum_grad_dot += self.inv_s[(i, i)] * self.inv_s[(i, j)] * grad_phi[i][i].dot(&grad_phi[i][j]);
                 }
             }
-            laplacian[k] = psi * (sum_lap + sum_grad_dot);
+            laplacian[i] = psi * (sum_lap + sum_grad_dot);
         }
         laplacian
     }
