@@ -186,12 +186,12 @@ mod tests {
         }
 
         // evaluate numerical laplacian
-        // let analytical_laplacian = stodet.laplacian(&r);
-        // let numerical_laplacian = stodet.numerical_laplacian(&r, h);
-        // // assert they are close enough
-        // for i in 0..r.len() {
-        //     assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
-        // }
+        let analytical_laplacian = stodet.laplacian(&r);
+        let numerical_laplacian = stodet.numerical_laplacian(&r, h);
+        // assert they are close enough
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
+        }
     }
 
 }

@@ -112,7 +112,11 @@ impl STOSlaterDet {
         self.s = DMatrix::zeros(self.n, self.n);
         for i in 0..self.n {
             for j in 0..self.n {
-                self.s[(i, j)] = self.sto[i].evaluate(&r[j]);
+                if self.spin[i] == self.spin[j] {
+                    self.s[(i, j)] = self.sto[i].evaluate(&r[j]);
+                } else {
+                    self.s[(i, j)] = 0.0;
+                }
             }
         }
         // calculate inverse of self.s
@@ -139,13 +143,16 @@ impl MultiWfn for STOSlaterDet {
         self.s = DMatrix::zeros(self.n, self.n);
         for i in 0..self.n {
             for j in 0..self.n {
-                self.s[(i, j)] = self.sto[j].evaluate(&r[i]);
-                println!("s[{}, {}] = {}", i, j, self.s[(i, j)]);
+                if self.spin[i] == self.spin[j] {
+                    self.s[(i, j)] = self.sto[i].evaluate(&r[j]);
+                } else {
+                    self.s[(i, j)] = 0.0;
+                }
             }
         }
         // Calculate the determinant
         let psi = self.s.determinant();
-        println!("psi = {}", psi);
+        // println!("psi = {}", psi);
         // Update the inverse of the Slater matrix
         self.inv_s = self.s.clone().try_inverse().unwrap();
         psi
@@ -155,13 +162,17 @@ impl MultiWfn for STOSlaterDet {
         // Compute the derivative of the Slater determinant
         let psi = self.evaluate(r);
         let mut derivative = vec![Vector3::zeros(); r.len()];
-        for k in 0..self.n {
+        for i in 0..self.n {
             let mut sum = Vector3::zeros();
             for j in 0..self.n {
-                let grad_phi = self.sto[j].derivative(&r[k]);
-                sum += self.inv_s[(k, j)] * grad_phi;
+                if self.spin[i] == self.spin[j] {
+                    let grad_phi = self.sto[j].derivative(&r[i]);
+                    sum += self.inv_s[(i, j)] * grad_phi;
+                } else {
+                    self.s[(i, j)] = 0.0;
+                }
             }
-            derivative[k] = psi * sum;
+            derivative[i] = psi * sum;
         }
         derivative
     }
