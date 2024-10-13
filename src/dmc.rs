@@ -119,7 +119,7 @@ impl Walker for HarmonicWalker {
     }
 }
 
-fn run_dmc_sampling() {
+fn run_harmonic_dmc_sampling() {
     let n_walkers = 1000;
     let n_steps = 1000;
     let dt = 0.01;
