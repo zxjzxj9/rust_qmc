@@ -119,17 +119,18 @@ impl Walker for HarmonicWalker {
     }
 }
 
-fn run_harmonic_dmc_sampling() {
-    let n_walkers = 1000;
-    let n_steps = 1000;
+pub(crate) fn run_harmonic_dmc_sampling() {
+    let n_walkers = 10000;
+    let n_target = 10000;
+    let n_steps = 10000;
     let dt = 0.01;
-    let eref = 0.0;
+    let mut eref = 0.0;
     let mut walkers: Vec<HarmonicWalker> = vec![];
     for _ in 0..n_walkers {
         walkers.push(HarmonicWalker::new(dt, eref));
     }
 
-    for _ in 0..n_steps {
+    for step in 0..n_steps {
         for walker in walkers.iter_mut() {
             walker.move_walker();
             walker.calculate_local_energy();
@@ -141,11 +142,11 @@ fn run_harmonic_dmc_sampling() {
             match walker.branching_decision() {
                 BranchingResult::Clone{n} => {
                     for _ in 0..n {
-                        new_walkers.push(*walker);
+                        new_walkers.push(walker.clone());
                     }
                 },
                 BranchingResult::Keep => {
-                    new_walkers.push(*walker);
+                    new_walkers.push(walker.clone());
                 },
                 BranchingResult::Kill => {
                     walker.mark_for_deletion();
@@ -154,6 +155,9 @@ fn run_harmonic_dmc_sampling() {
         }
 
         walkers = new_walkers;
+        eref = eref + (1.0 - walkers.len() as f64 / n_target as f64) / dt;
+        let avg_energy = walkers.iter().map(|w| w.energy).sum::<f64>() / walkers.len() as f64;
+        println!("In step {}, Number of walkers: {}, energy: {}", step, walkers.len(), avg_energy);
     }
 
     let n_walkers = walkers.len();

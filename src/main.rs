@@ -27,6 +27,9 @@ fn main() {
     //     J: Jastrow1 { F: 1.0 },
     // };
 
+    dmc::run_harmonic_dmc_sampling();
+    return;
+
     // read the config file, with command line argument, use clap mod to input the file name
     let args = Args::parse();
     // let h2 = conf::read_h2molecule_vb(&args.config);
