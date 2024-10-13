@@ -118,3 +118,44 @@ impl Walker for HarmonicWalker {
         self.marked_for_deletion = true;
     }
 }
+
+fn run_dmc_sampling() {
+    let n_walkers = 1000;
+    let n_steps = 1000;
+    let dt = 0.01;
+    let eref = 0.0;
+    let mut walkers: Vec<HarmonicWalker> = vec![];
+    for _ in 0..n_walkers {
+        walkers.push(HarmonicWalker::new(dt, eref));
+    }
+
+    for _ in 0..n_steps {
+        for walker in walkers.iter_mut() {
+            walker.move_walker();
+            walker.calculate_local_energy();
+            walker.update_weight(eref);
+        }
+
+        let mut new_walkers: Vec<HarmonicWalker> = vec![];
+        for walker in walkers.iter_mut() {
+            match walker.branching_decision() {
+                BranchingResult::Clone{n} => {
+                    for _ in 0..n {
+                        new_walkers.push(*walker);
+                    }
+                },
+                BranchingResult::Keep => {
+                    new_walkers.push(*walker);
+                },
+                BranchingResult::Kill => {
+                    walker.mark_for_deletion();
+                },
+            }
+        }
+
+        walkers = new_walkers;
+    }
+
+    let n_walkers = walkers.len();
+    println!("Number of walkers: {}", n_walkers);
+}
