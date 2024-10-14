@@ -1,10 +1,9 @@
+use rand::{Rng, RngCore};
+use rand_distr::{Normal, Distribution};
 
-use nalgebra::{min, ComplexField, DMatrix, Matrix, Vector3};
-use rand::distributions::{Distribution, Uniform};
-use rand_distr::Normal;
+const MAX_CLONES: i32 = 3; //  number of clones to prevent explosion
 
-// reference: https://www.thphys.uni-heidelberg.de/~wetzel/qmc2006/KOSZ96.pdf
-
+// reference paper, https://www.thphys.uni-heidelberg.de/~wetzel/qmc2006/KOSZ96.pdf
 // Define a trait for walker behavior
 pub trait Walker {
     // Move the walker to a new position
@@ -19,11 +18,6 @@ pub trait Walker {
     // Decide whether to branch (clone) or die
     fn branching_decision(&mut self) -> BranchingResult;
 
-    // // Clone the walker (for branching)
-    // fn clone_walker(&self) -> Self
-    // where
-    //     Self: Sized;
-
     // Check if the walker should be deleted
     fn should_be_deleted(&self) -> bool;
 
@@ -33,22 +27,22 @@ pub trait Walker {
 
 // Define an enum for branching decisions
 pub enum BranchingResult {
-    Clone{n: usize}, // n is the size to be cloned
-    Keep,  // The walker continues as is
-    Kill,  // The walker should be removed
+    Clone { n: usize }, // n is the number of clones
+    Keep,               // The walker continues as is
+    Kill,               // The walker should be removed
 }
 
 #[derive(Copy, Clone)]
 struct HarmonicWalker {
     position: f64,
-    dt: f64, // \Delta \tau
-    sdt: f64, // \sqrt \Delta \tau
+    dt: f64,  // Δτ
+    sdt: f64, // √Δτ
     energy: f64,
     weight: f64,
     marked_for_deletion: bool,
 }
 
-/// initialize HarmonicWalker
+// Initialize HarmonicWalker
 impl HarmonicWalker {
     fn new(dt: f64, eref: f64) -> Self {
         let position = 0.0;
@@ -56,12 +50,12 @@ impl HarmonicWalker {
         let weight = 1.0;
         let marked_for_deletion = false;
         let mut r = Self {
-            position: position,
-            dt: dt,
+            position,
+            dt,
             sdt: dt.sqrt(),
-            energy: energy,
-            weight: weight,
-            marked_for_deletion: false,
+            energy,
+            weight,
+            marked_for_deletion,
         };
         r.calculate_local_energy();
         r.update_weight(eref);
@@ -73,7 +67,7 @@ impl Walker for HarmonicWalker {
     fn move_walker(&mut self) {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, self.sdt).unwrap();
-        self.position += dist.sample(&mut rng)
+        self.position += dist.sample(&mut rng);
     }
 
     fn calculate_local_energy(&mut self) {
@@ -82,33 +76,22 @@ impl Walker for HarmonicWalker {
     }
 
     fn update_weight(&mut self, e_ref: f64) {
-        self.weight = ((-self.energy + e_ref)*self.dt).exp();
+        self.weight = ((-self.energy + e_ref) * self.dt).exp();
     }
 
     fn branching_decision(&mut self) -> BranchingResult {
         let mut rng = rand::thread_rng();
-        let dist = Uniform::new(0.0, 1.0);
-        let r: f64 = dist.sample(&mut rng);
-        // make a branching decision
-        let cnt = min((self.weight + r) as i32, 3);
+        let r: f64 = rng.gen::<f64>();
+        let cnt = ((self.weight + r).floor() as i32).max(0).min(MAX_CLONES);
         if cnt == 0 {
             self.marked_for_deletion = true;
         }
         match cnt {
             0 => BranchingResult::Kill,
             1 => BranchingResult::Keep,
-            _ => BranchingResult::Clone{n: cnt as usize},
+            _ => BranchingResult::Clone { n: cnt as usize },
         }
     }
-
-    // fn clone_walker(&self) -> Self {
-    //     Self {
-    //         position: self.position,
-    //         energy: self.energy,
-    //         weight: self.weight,
-    //         marked_for_deletion: false,
-    //     }
-    // }
 
     fn should_be_deleted(&self) -> bool {
         self.marked_for_deletion
@@ -120,46 +103,114 @@ impl Walker for HarmonicWalker {
 }
 
 pub(crate) fn run_harmonic_dmc_sampling() {
-    let n_walkers = 10000;
-    let n_target = 10000;
-    let n_steps = 10000;
-    let dt = 0.01;
+    let n_walkers = 1000;
+    let n_target = 1000;
+    let n_steps = 1000;
+    let dt = 0.1;
     let mut eref = 0.0;
     let mut walkers: Vec<HarmonicWalker> = vec![];
     for _ in 0..n_walkers {
         walkers.push(HarmonicWalker::new(dt, eref));
     }
 
+    // Vectors to store mean energies and standard deviations
+    let mut mean_energies = Vec::with_capacity(n_steps);
+    let mut std_energies = Vec::with_capacity(n_steps);
+
     for step in 0..n_steps {
+        // Move and update each walker
         for walker in walkers.iter_mut() {
             walker.move_walker();
             walker.calculate_local_energy();
             walker.update_weight(eref);
         }
 
+        // Branching process
         let mut new_walkers: Vec<HarmonicWalker> = vec![];
         for walker in walkers.iter_mut() {
             match walker.branching_decision() {
-                BranchingResult::Clone{n} => {
+                BranchingResult::Clone { n } => {
                     for _ in 0..n {
                         new_walkers.push(walker.clone());
                     }
-                },
+                }
                 BranchingResult::Keep => {
                     new_walkers.push(walker.clone());
-                },
+                }
                 BranchingResult::Kill => {
                     walker.mark_for_deletion();
-                },
+                }
             }
         }
 
         walkers = new_walkers;
         eref = eref + (1.0 - walkers.len() as f64 / n_target as f64) / dt;
-        let avg_energy = walkers.iter().map(|w| w.energy).sum::<f64>() / walkers.len() as f64;
-        println!("In step {}, Number of walkers: {}, energy: {}", step, walkers.len(), avg_energy);
+
+        // Calculate mean energy and standard deviation
+        let energies: Vec<f64> = walkers.iter().map(|w| w.energy).collect();
+        let n = energies.len() as f64;
+        let mean_energy = energies.iter().sum::<f64>() / n;
+        let variance_energy = energies
+            .iter()
+            .map(|e| (e - mean_energy).powi(2))
+            .sum::<f64>()
+            / n;
+        let std_energy = variance_energy.sqrt();
+
+        mean_energies.push(mean_energy);
+        std_energies.push(std_energy);
+
+        println!(
+            "In step {:06}, Number of walkers: {:06}, energy: {:12.6}, std_dev: {:12.6}",
+            step, walkers.len(), mean_energy, std_energy
+        );
     }
 
     let n_walkers = walkers.len();
-    println!("Number of walkers: {}", n_walkers);
+    println!("Final number of walkers: {}", n_walkers);
+
+    // Write final positions to a file (wavefunction)
+    use std::fs::File;
+    use std::io::{BufWriter, Write};
+
+    let file = File::create("positions.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    for walker in walkers.iter() {
+        writeln!(writer, "{}", walker.position).unwrap();
+    }
+
+    // Write energy trajectory to a file
+    let file = File::create("energies.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    for (step, (mean_energy, std_energy)) in mean_energies
+        .iter()
+        .zip(std_energies.iter())
+        .enumerate()
+    {
+        writeln!(
+            writer,
+            "{} {} {}",
+            step, mean_energy, std_energy
+        )
+            .unwrap();
+    }
+
+    // Calculate overall average energy and standard deviation
+    let n = mean_energies.len() as f64;
+    let overall_mean = mean_energies.iter().sum::<f64>() / n;
+    let overall_variance = mean_energies
+        .iter()
+        .map(|e| (e - overall_mean).powi(2))
+        .sum::<f64>()
+        / n;
+    let overall_std_dev = overall_variance.sqrt();
+
+    println!(
+        "Overall mean energy: {}, overall std dev: {}",
+        overall_mean, overall_std_dev
+    );
+}
+
+fn main() {
+    run_harmonic_dmc_sampling();
 }
