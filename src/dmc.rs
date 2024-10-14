@@ -42,7 +42,7 @@ pub enum BranchingResult {
 struct HarmonicWalker {
     position: f64,
     dt: f64, // \Delta \tau
-    isdt: f64, // \frac{1}{\sqrt \Delta \tau}
+    sdt: f64, // \sqrt \Delta \tau
     energy: f64,
     weight: f64,
     marked_for_deletion: bool,
@@ -58,7 +58,7 @@ impl HarmonicWalker {
         let mut r = Self {
             position: position,
             dt: dt,
-            isdt: 1.0 / dt.sqrt(),
+            sdt: dt.sqrt(),
             energy: energy,
             weight: weight,
             marked_for_deletion: false,
@@ -72,7 +72,7 @@ impl HarmonicWalker {
 impl Walker for HarmonicWalker {
     fn move_walker(&mut self) {
         let mut rng = rand::thread_rng();
-        let dist = Normal::new(0.0, self.isdt).unwrap();
+        let dist = Normal::new(0.0, self.sdt).unwrap();
         self.position += dist.sample(&mut rng)
     }
 
