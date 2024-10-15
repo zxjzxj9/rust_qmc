@@ -27,7 +27,9 @@ fn main() {
     //     J: Jastrow1 { F: 1.0 },
     // };
 
-    dmc::run_harmonic_dmc_sampling();
+
+    // dmc::run_dmc_sampling::<dmc::HarmonicWalker>();
+    dmc::run_dmc_sampling::<dmc::HydrogenAtomWalker>();
     return;
 
     // read the config file, with command line argument, use clap mod to input the file name

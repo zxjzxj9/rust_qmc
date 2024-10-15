@@ -1,3 +1,4 @@
+use nalgebra::Vector3;
 use rand::{Rng, RngCore};
 use rand_distr::{Normal, Distribution};
 
@@ -6,11 +7,14 @@ const MAX_CLONES: i32 = 3; //  number of clones to prevent explosion
 // reference paper, https://www.thphys.uni-heidelberg.de/~wetzel/qmc2006/KOSZ96.pdf
 // Define a trait for walker behavior
 pub trait Walker {
+    fn new(dt: f64, eref: f64) -> Self;
     // Move the walker to a new position
     fn move_walker(&mut self);
 
     // Calculate local properties like energy
     fn calculate_local_energy(&mut self);
+
+    fn local_energy(&self) -> f64;
 
     // Update the walker's weight
     fn update_weight(&mut self, e_ref: f64);
@@ -33,7 +37,7 @@ pub enum BranchingResult {
 }
 
 #[derive(Copy, Clone)]
-struct HarmonicWalker {
+pub(crate) struct HarmonicWalker {
     position: f64,
     dt: f64,  // Δτ
     sdt: f64, // √Δτ
@@ -42,10 +46,23 @@ struct HarmonicWalker {
     marked_for_deletion: bool,
 }
 
-// Initialize HarmonicWalker
-impl HarmonicWalker {
+#[derive(Copy, Clone)]
+pub(crate) struct HydrogenAtomWalker {
+    position: Vector3<f64>,
+    dt: f64,  // Δτ
+    sdt: f64, // √Δτ
+    energy: f64,
+    weight: f64,
+    marked_for_deletion: bool,
+}
+
+
+impl Walker for HydrogenAtomWalker {
     fn new(dt: f64, eref: f64) -> Self {
-        let position = 0.0;
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+
+        let position =  Vector3::<f64>::from_distribution(&dist, &mut rng);
         let energy = 0.0;
         let weight = 1.0;
         let marked_for_deletion = false;
@@ -61,18 +78,20 @@ impl HarmonicWalker {
         r.update_weight(eref);
         r
     }
-}
-
-impl Walker for HarmonicWalker {
     fn move_walker(&mut self) {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, self.sdt).unwrap();
-        self.position += dist.sample(&mut rng);
+
+        self.position += Vector3::<f64>::from_distribution(&dist, &mut rng);
     }
 
     fn calculate_local_energy(&mut self) {
-        let x = self.position;
-        self.energy = 0.5 * x * x;
+        let r = self.position.norm();
+        self.energy = -1.0/r;
+    }
+
+    fn local_energy(&self) -> f64 {
+       return self.energy;
     }
 
     fn update_weight(&mut self, e_ref: f64) {
@@ -102,16 +121,83 @@ impl Walker for HarmonicWalker {
     }
 }
 
-pub(crate) fn run_harmonic_dmc_sampling() {
+impl Walker for HarmonicWalker {
+    fn new(dt: f64, eref: f64) -> Self {
+        let position = 0.0;
+        let energy = 0.0;
+        let weight = 1.0;
+        let marked_for_deletion = false;
+        let mut r = Self {
+            position,
+            dt,
+            sdt: dt.sqrt(),
+            energy,
+            weight,
+            marked_for_deletion,
+        };
+        r.calculate_local_energy();
+        r.update_weight(eref);
+        r
+    }
+    fn move_walker(&mut self) {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, self.sdt).unwrap();
+        self.position += dist.sample(&mut rng);
+    }
+
+    fn calculate_local_energy(&mut self) {
+        let x = self.position;
+        self.energy = 0.5 * x * x;
+    }
+
+    fn local_energy(&self) -> f64 {
+        return self.energy;
+    }
+
+    fn update_weight(&mut self, e_ref: f64) {
+        self.weight = ((-self.energy + e_ref) * self.dt).exp();
+    }
+
+    fn branching_decision(&mut self) -> BranchingResult {
+        let mut rng = rand::thread_rng();
+        let r: f64 = rng.gen::<f64>();
+        let cnt = ((self.weight + r).floor() as i32).max(0).min(MAX_CLONES);
+        if cnt == 0 {
+            self.marked_for_deletion = true;
+        }
+        match cnt {
+            0 => BranchingResult::Kill,
+            1 => BranchingResult::Keep,
+            _ => BranchingResult::Clone { n: cnt as usize },
+        }
+    }
+
+    fn should_be_deleted(&self) -> bool {
+        self.marked_for_deletion
+    }
+
+    fn mark_for_deletion(&mut self) {
+        self.marked_for_deletion = true;
+    }
+}
+
+pub(crate) fn run_dmc_sampling<T: Walker + Clone>() {
     let n_walkers = 10000;
     let n_target = 10000;
     let n_steps = 10000;
     let dt = 0.01;
     let mut eref = 0.0;
-    let mut walkers: Vec<HarmonicWalker> = vec![];
+
+    // let mut walkers: Vec<HarmonicWalker> = vec![];
+    // for _ in 0..n_walkers {
+    //     walkers.push(HarmonicWalker::new(dt, eref));
+    // }
+
+    let mut walkers: Vec<T> = vec![];
     for _ in 0..n_walkers {
-        walkers.push(HarmonicWalker::new(dt, eref));
+        walkers.push(T::new(dt, eref));
     }
+
 
     // Vectors to store mean energies and standard deviations
     let mut mean_energies = Vec::with_capacity(n_steps);
@@ -126,7 +212,7 @@ pub(crate) fn run_harmonic_dmc_sampling() {
         }
 
         // Branching process
-        let mut new_walkers: Vec<HarmonicWalker> = vec![];
+        let mut new_walkers: Vec<T> = vec![];
         for walker in walkers.iter_mut() {
             match walker.branching_decision() {
                 BranchingResult::Clone { n } => {
@@ -147,7 +233,7 @@ pub(crate) fn run_harmonic_dmc_sampling() {
         eref = eref + (1.0 - walkers.len() as f64 / n_target as f64) / dt;
 
         // Calculate mean energy and standard deviation
-        let energies: Vec<f64> = walkers.iter().map(|w| w.energy).collect();
+        let energies: Vec<f64> = walkers.iter().map(|w| w.local_energy()).collect();
         let n = energies.len() as f64;
         let mean_energy = energies.iter().sum::<f64>() / n;
         let variance_energy = energies
@@ -175,9 +261,9 @@ pub(crate) fn run_harmonic_dmc_sampling() {
 
     let file = File::create("positions.txt").unwrap();
     let mut writer = BufWriter::new(file);
-    for walker in walkers.iter() {
-        writeln!(writer, "{}", walker.position).unwrap();
-    }
+    // for walker in walkers.iter() {
+    //     writeln!(writer, "{}", walker.position).unwrap();
+    // }
 
     // Write energy trajectory to a file
     let file = File::create("energies.txt").unwrap();
@@ -209,8 +295,4 @@ pub(crate) fn run_harmonic_dmc_sampling() {
         "Overall mean energy: {}, overall std dev: {}",
         overall_mean, overall_std_dev
     );
-}
-
-fn main() {
-    run_harmonic_dmc_sampling();
 }
