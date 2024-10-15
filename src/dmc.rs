@@ -103,10 +103,10 @@ impl Walker for HarmonicWalker {
 }
 
 pub(crate) fn run_harmonic_dmc_sampling() {
-    let n_walkers = 1000;
-    let n_target = 1000;
-    let n_steps = 1000;
-    let dt = 0.1;
+    let n_walkers = 10000;
+    let n_target = 10000;
+    let n_steps = 10000;
+    let dt = 0.01;
     let mut eref = 0.0;
     let mut walkers: Vec<HarmonicWalker> = vec![];
     for _ in 0..n_walkers {
