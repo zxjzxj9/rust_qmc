@@ -56,6 +56,16 @@ pub(crate) struct HydrogenAtomWalker {
     marked_for_deletion: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct HydrogenMoleculeWalker {
+    position: Vec<Vector3<f64>>,
+    dt: f64,  // Δτ
+    sdt: f64, // √Δτ
+    energy: f64,
+    weight: f64,
+    marked_for_deletion: bool,
+}
+
 
 impl Walker for HydrogenAtomWalker {
     fn new(dt: f64, eref: f64) -> Self {
@@ -295,4 +305,65 @@ pub(crate) fn run_dmc_sampling<T: Walker + Clone>() {
         "Overall mean energy: {}, overall std dev: {}",
         overall_mean, overall_std_dev
     );
+}
+
+impl Walker for HydrogenMoleculeWalker {
+    fn new(dt: f64, eref: f64) -> Self {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+
+        let position = vec![
+            Vector3::<f64>::from_distribution(&dist, &mut rng),
+            Vector3::<f64>::from_distribution(&dist, &mut rng),
+        ];
+        let energy = 0.0;
+        let weight = 1.0;
+        let marked_for_deletion = false;
+        let mut r = Self {
+            position,
+            dt,
+            sdt: dt.sqrt(),
+            energy,
+            weight,
+            marked_for_deletion,
+        };
+        r.calculate_local_energy();
+        r.update_weight(eref);
+        r
+    }
+
+    fn move_walker(&mut self) {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, self.sdt).unwrap();
+
+        for pos in self.position.iter_mut() {
+            *pos += Vector3::<f64>::from_distribution(&dist, &mut rng);
+        }
+    }
+
+    fn calculate_local_energy(&mut self) {
+        let r1 = self.position[0].norm();
+        let r2 = self.position[1].norm();
+        self.energy = -1.0 / r1 - 1.0 / r2 + 1.0 / (self.position[0] - self.position[1]).norm();
+    }
+
+    fn local_energy(&self) -> f64 {
+        todo!()
+    }
+
+    fn update_weight(&mut self, e_ref: f64) {
+        todo!()
+    }
+
+    fn branching_decision(&mut self) -> BranchingResult {
+        todo!()
+    }
+
+    fn should_be_deleted(&self) -> bool {
+        todo!()
+    }
+
+    fn mark_for_deletion(&mut self) {
+        todo!()
+    }
 }
