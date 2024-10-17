@@ -58,6 +58,7 @@ pub(crate) struct HydrogenAtomWalker {
 
 #[derive(Clone)]
 pub(crate) struct HydrogenMoleculeWalker {
+    nuclei: Vec<Vector3<f64>>,
     position: Vec<Vector3<f64>>,
     dt: f64,  // Δτ
     sdt: f64, // √Δτ
@@ -72,7 +73,7 @@ impl Walker for HydrogenAtomWalker {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, 1.0).unwrap();
 
-        let position =  Vector3::<f64>::from_distribution(&dist, &mut rng);
+        let position = Vector3::<f64>::from_distribution(&dist, &mut rng);
         let energy = 0.0;
         let weight = 1.0;
         let marked_for_deletion = false;
@@ -97,11 +98,11 @@ impl Walker for HydrogenAtomWalker {
 
     fn calculate_local_energy(&mut self) {
         let r = self.position.norm();
-        self.energy = -1.0/r;
+        self.energy = -1.0 / r;
     }
 
     fn local_energy(&self) -> f64 {
-       return self.energy;
+        return self.energy;
     }
 
     fn update_weight(&mut self, e_ref: f64) {
@@ -320,6 +321,7 @@ impl Walker for HydrogenMoleculeWalker {
         let weight = 1.0;
         let marked_for_deletion = false;
         let mut r = Self {
+            nuclei: vec![Vector3::new(0.0, 0.0, 0.7), Vector3::new(0.0, 0.0, -0.7)],
             position,
             dt,
             sdt: dt.sqrt(),
@@ -342,28 +344,41 @@ impl Walker for HydrogenMoleculeWalker {
     }
 
     fn calculate_local_energy(&mut self) {
-        let r1 = self.position[0].norm();
-        let r2 = self.position[1].norm();
-        self.energy = -1.0 / r1 - 1.0 / r2 + 1.0 / (self.position[0] - self.position[1]).norm();
+        let r11 = (self.position[0] - self.nuclei[0]).norm();
+        let r12 = (self.position[0] - self.nuclei[1]).norm();
+        let r21 = (self.position[1] - self.nuclei[0]).norm();
+        let r22 = (self.position[1] - self.nuclei[1]).norm();
+        let R = (self.nuclei[0] - self.nuclei[1]).norm();
+        self.energy = -1.0 / r11 - 1.0 / r12 - 1.0/r12 - 1.0/r22 + 1.0 / (self.position[0] - self.position[1]).norm() + 1.0/R;
     }
 
     fn local_energy(&self) -> f64 {
-        todo!()
+        self.energy
     }
 
     fn update_weight(&mut self, e_ref: f64) {
-        todo!()
+        self.weight = ((-self.energy + e_ref) * self.dt).exp();
     }
 
     fn branching_decision(&mut self) -> BranchingResult {
-        todo!()
+        let mut rng = rand::thread_rng();
+        let r: f64 = rng.gen::<f64>();
+        let cnt = ((self.weight + r).floor() as i32).max(0).min(MAX_CLONES);
+        if cnt == 0 {
+            self.marked_for_deletion = true;
+        }
+        match cnt {
+            0 => BranchingResult::Kill,
+            1 => BranchingResult::Keep,
+            _ => BranchingResult::Clone { n: cnt as usize },
+        }
     }
 
     fn should_be_deleted(&self) -> bool {
-        todo!()
+        self.marked_for_deletion
     }
 
     fn mark_for_deletion(&mut self) {
-        todo!()
+        self.marked_for_deletion = true;
     }
 }

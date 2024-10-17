@@ -29,7 +29,8 @@ fn main() {
 
 
     // dmc::run_dmc_sampling::<dmc::HarmonicWalker>();
-    dmc::run_dmc_sampling::<dmc::HydrogenAtomWalker>();
+    // dmc::run_dmc_sampling::<dmc::HydrogenAtomWalker>();
+    dmc::run_dmc_sampling::<dmc::HydrogenMoleculeWalker>();
     return;
 
     // read the config file, with command line argument, use clap mod to input the file name
