@@ -56,6 +56,16 @@ pub(crate) struct HydrogenAtomWalker {
     marked_for_deletion: bool,
 }
 
+#[derive(Copy, Clone)]
+pub(crate) struct LithiumAtomWalker {
+    position: Vector3<f64>,
+    dt: f64,  // Δτ
+    sdt: f64, // √Δτ
+    energy: f64,
+    weight: f64,
+    marked_for_deletion: bool,
+}
+
 #[derive(Clone)]
 pub(crate) struct HydrogenMoleculeWalker {
     nuclei: Vec<Vector3<f64>>,
