@@ -359,7 +359,7 @@ impl Walker for HydrogenMoleculeWalker {
         let r21 = (self.position[1] - self.nuclei[0]).norm();
         let r22 = (self.position[1] - self.nuclei[1]).norm();
         let R = (self.nuclei[0] - self.nuclei[1]).norm();
-        self.energy = -1.0 / r11 - 1.0 / r12 - 1.0/r12 - 1.0/r22 + 1.0 / (self.position[0] - self.position[1]).norm() + 1.0/R;
+        self.energy = -1.0 / r11 - 1.0 / r12 - 1.0/r21 - 1.0/r22 + 1.0 / (self.position[0] - self.position[1]).norm() + 1.0/R;
     }
 
     fn local_energy(&self) -> f64 {
