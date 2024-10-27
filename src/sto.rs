@@ -196,9 +196,9 @@ impl MultiWfn for STOSlaterDet {
                 sum_lap += self.inv_s[(i, j)] * lap_phi[i][j];
             }
             let mut sum_grad_dot = 0.0;
-            for i in 0..self.n {
-                for j in 0..self.n {
-                    sum_grad_dot += self.inv_s[(i, i)] * self.inv_s[(i, j)] * grad_phi[i][i].dot(&grad_phi[i][j]);
+            for j in 0..self.n {
+                for k in 0..self.n {
+                    sum_grad_dot += self.inv_s[(i, j)] * self.inv_s[(i, k)] * grad_phi[i][j].dot(&grad_phi[i][k]);
                 }
             }
             laplacian[i] = psi * (sum_lap + sum_grad_dot);
