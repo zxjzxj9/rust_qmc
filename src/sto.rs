@@ -185,20 +185,20 @@ impl MultiWfn for STOSlaterDet {
         for i in 0..self.n {
             for j in 0..self.n {
                 if self.spin[i] == self.spin[j] {
-                    grad_phi[i][j] = self.sto[i].derivative(&r[j]);
-                    lap_phi[i][j] = self.sto[i].laplacian(&r[j]);
+                    grad_phi[i][j] = self.sto[j].derivative(&r[i]);
+                    lap_phi[i][j] = self.sto[j].laplacian(&r[i]);
                 }
             }
         }
         for i in 0..self.n {
             let mut sum_lap = 0.0;
             for j in 0..self.n {
-                sum_lap += self.inv_s[(i, j)] * lap_phi[j][i];
+                sum_lap += self.inv_s[(j, i)] * lap_phi[i][j];
             }
             let mut sum_grad_dot = 0.0;
             for j in 0..self.n {
                 for k in 0..self.n {
-                    sum_grad_dot += self.inv_s[(i, j)] * self.inv_s[(i, k)] * grad_phi[j][i].dot(&grad_phi[k][i]);
+                    sum_grad_dot += self.inv_s[(j, i)] * self.inv_s[(k, i)] * grad_phi[i][j].dot(&grad_phi[i][k]);
                 }
             }
             laplacian[i] = psi * (sum_lap + sum_grad_dot);
