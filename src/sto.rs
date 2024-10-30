@@ -144,7 +144,7 @@ impl MultiWfn for STOSlaterDet {
         for i in 0..self.n {
             for j in 0..self.n {
                 if self.spin[i] == self.spin[j] {
-                    self.s[(i, j)] = self.sto[i].evaluate(&r[j]);
+                    self.s[(i, j)] = self.sto[j].evaluate(&r[i]);
                 } else {
                     self.s[(i, j)] = 0.0;
                 }
@@ -167,7 +167,7 @@ impl MultiWfn for STOSlaterDet {
             for j in 0..self.n {
                 if self.spin[i] == self.spin[j] {
                     let grad_phi = self.sto[j].derivative(&r[i]);
-                    sum += self.inv_s[(i, j)] * grad_phi;
+                    sum += self.inv_s[(j, i)] * grad_phi;
                 }
             }
             derivative[i] = psi * sum;
