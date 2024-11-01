@@ -1,6 +1,7 @@
 use nalgebra::{DMatrix, Matrix, Vector3};
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
+use crate::mcmc::EnergyCalculator;
 use crate::wfn::{MultiWfn, SingleWfn};
 
 // \psi_n(r) = A \sum_{\nu=1}^{m} \phi_{\nu n} r^{p_{\nu}} \exp\left(-\xi_n r\right)
@@ -204,5 +205,43 @@ impl MultiWfn for STOSlaterDet {
             laplacian[i] = psi * (sum_lap + sum_grad_dot);
         }
         laplacian
+    }
+}
+
+// implement energy for STO
+impl EnergyCalculator for STOSlaterDet {
+    fn local_energy(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
+        let psi = self.evaluate(r);
+        let mut kinetic_energy = 0.0;
+        let mut potential_energy = 0.0;
+        let mut laplacian = vec![0.0; r.len()];
+        let mut grad = vec![Vector3::zeros(); r.len()];
+        for i in 0..self.n {
+            let mut sum_lap = 0.0;
+            for j in 0..self.n {
+                sum_lap += self.inv_s[(j, i)] * self.sto[j].laplacian(&r[i]);
+            }
+            let mut sum_grad_dot = 0.0;
+            for j in 0..self.n {
+                for k in 0..self.n {
+                    sum_grad_dot += self.inv_s[(j, i)] * self.inv_s[(k, i)] * self.sto[j].derivative(&r[i]).dot(&self.sto[k].derivative(&r[i]));
+                }
+            }
+            laplacian[i] = psi * (sum_lap + sum_grad_dot);
+            grad[i] = psi * self.sto[i].derivative(&r[i]);
+        }
+        // Compute the kinetic energy
+        for i in 0..self.n {
+            kinetic_energy += -0.5 * laplacian[i];
+        }
+        // Compute the potential energy
+        for i in 0..self.n {
+            for j in 0..self.n {
+                if self.spin[i] == self.spin[j] {
+                    potential_energy += -1.0 / (r[i] - self.sto[j].R).norm();
+                }
+            }
+        }
+        kinetic_energy + potential_energy
     }
 }
