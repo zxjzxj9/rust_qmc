@@ -108,7 +108,21 @@ pub(crate) struct STOSlaterDet {
 }
 
 
+fn u(r: f64, a: f64, b: f64) -> f64 {
+    a * r / (1.0 + b * r)
+}
+
+fn du_dr(r: f64, a: f64, b: f64) -> f64 {
+    a / (1.0 + b * r).powi(2)
+}
+
+fn d2u_dr2(r: f64, a: f64, b: f64) -> f64 {
+    -2.0 * a * b / (1.0 + b * r).powi(3)
+}
+
+
 impl STOSlaterDet {
+
     pub fn init_wfn(&mut self, r: Vec<Vector3<f64>>) -> &Self {
         self.s = DMatrix::zeros(self.n, self.n);
         for i in 0..self.n {
@@ -156,13 +170,32 @@ impl MultiWfn for STOSlaterDet {
         // println!("psi = {}", psi);
         // Update the inverse of the Slater matrix
         self.inv_s = self.s.clone().try_inverse().unwrap();
-        psi
+        // Calculate the determinant
+        let psi_s = self.s.determinant();
+
+        // Compute the Jastrow factor
+        let mut jastrow = 0.0;
+        for i in 0..self.n {
+            for j in (i + 1)..self.n {
+                let r_ij = (r[i] - r[j]).norm();
+                // You may define a_ij and b as constants or functions of i and j
+                let a_ij = 0.5; // Example value
+                let b = 0.5;    // Example value
+                jastrow += u(r_ij, a_ij, b);
+            }
+        }
+        let j = f64::exp(jastrow);
+
+        // Update the inverse of the Slater matrix
+        self.inv_s = self.s.clone().try_inverse().unwrap();
+        psi_s * j
     }
 
     fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
-        // Compute the derivative of the Slater determinant
         let psi = self.evaluate(r);
         let mut derivative = vec![Vector3::zeros(); r.len()];
+
+        // Compute gradients of the Slater determinant
         for i in 0..self.n {
             let mut sum = Vector3::zeros();
             for j in 0..self.n {
@@ -171,7 +204,27 @@ impl MultiWfn for STOSlaterDet {
                     sum += self.inv_s[(j, i)] * grad_phi;
                 }
             }
-            derivative[i] = psi * sum;
+            derivative[i] = sum;
+        }
+
+        // Compute gradients of the Jastrow factor
+        let mut grad_ln_j = vec![Vector3::zeros(); self.n];
+        for i in 0..self.n {
+            for j in 0..self.n {
+                if i != j {
+                    let r_ij = r[i] - r[j];
+                    let r_ij_norm = r_ij.norm();
+                    let a_ij = 0.5; // Example value
+                    let b = 0.5;    // Example value
+                    let du = du_dr(r_ij_norm, a_ij, b);
+                    grad_ln_j[i] += du * r_ij / r_ij_norm;
+                }
+            }
+        }
+
+        // Combine gradients
+        for i in 0..self.n {
+            derivative[i] = psi * (derivative[i] + grad_ln_j[i]);
         }
         derivative
     }
