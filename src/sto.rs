@@ -107,6 +107,23 @@ pub(crate) struct STOSlaterDet {
     pub(crate) inv_s: DMatrix<f64>,
 }
 
+/// Parameters for the Jastrow factor.
+struct JastrowParameters {
+    /// Electron-electron interaction parameters.
+    a: f64,
+    b: f64,
+    /// Electron-nucleus interaction parameters.
+    c: f64,
+    d: f64,
+}
+
+/// Represents the Jastrow factor for multi-center electrons.
+struct JastrowFactor {
+    /// Positions of nuclei in 3D space.
+    nucleus_positions: Vec<[f64; 3]>,
+    /// Parameters for the Jastrow factor.
+    parameters: JastrowParameters,
+}
 
 fn u(r: f64, a: f64, b: f64) -> f64 {
     a * r / (1.0 + b * r)
