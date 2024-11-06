@@ -120,9 +120,55 @@ struct JastrowParameters {
 /// Represents the Jastrow factor for multi-center electrons.
 struct JastrowFactor {
     /// Positions of nuclei in 3D space.
-    nucleus_positions: Vec<[f64; 3]>,
+    nucleus_positions: Vec<Vector3<f64>>,
     /// Parameters for the Jastrow factor.
     parameters: JastrowParameters,
+}
+
+impl JastrowFactor {
+    /// Creates a new `JastrowFactor`.
+    ///
+    /// # Arguments
+    ///
+    /// * `nucleus_positions` - A vector of 3D positions of the nuclei.
+    /// * `parameters` - The parameters for the Jastrow factor.
+    fn new(nucleus_positions: Vec<Vector3<f64>>, parameters: JastrowParameters) -> Self {
+        JastrowFactor {
+            nucleus_positions,
+            parameters,
+        }
+    }
+
+    /// Computes the Jastrow factor for given electron positions.
+    ///
+    /// # Arguments
+    ///
+    /// * `electron_positions` - A vector of 3D positions of the electrons.
+    ///
+    /// # Returns
+    ///
+    /// * The computed Jastrow factor as a `f64`.
+    fn compute(&self, electron_positions: &Vec<Vector3<f64>>) -> f64 {
+        let mut u = 0.0;
+
+        // Electron-electron interaction terms.
+        for i in 0..electron_positions.len() {
+            for j in (i + 1)..electron_positions.len() {
+                let r_ij = (electron_positions[i]- electron_positions[j]).norm();
+                u += self.parameters.a * r_ij / (1.0 + self.parameters.b * r_ij);
+            }
+        }
+
+        // Electron-nucleus interaction terms.
+        for electron_pos in electron_positions {
+            for nucleus_pos in &self.nucleus_positions {
+                let r_iI = (electron_pos - nucleus_pos).norm();
+                u += self.parameters.c * r_iI / (1.0 + self.parameters.d * r_iI);
+            }
+        }
+
+        (-u).exp()
+    }
 }
 
 fn u(r: f64, a: f64, b: f64) -> f64 {
