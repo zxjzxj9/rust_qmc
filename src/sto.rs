@@ -171,6 +171,74 @@ impl JastrowFactor {
     }
 }
 
+impl MultiWfn for JastrowFactor {
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+        let mut r = vec![];
+        for _ in 0..self.nucleus_positions.len() {
+            r.push(Vector3::<f64>::from_distribution(&dist, &mut rng));
+        }
+        r
+    }
+
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
+        self.compute(r)
+    }
+
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+        let mut derivative = vec![Vector3::zeros(); r.len()];
+
+        // Electron-electron interaction terms.
+        for i in 0..r.len() {
+            for j in (i + 1)..r.len() {
+                let r_ij = (r[i] - r[j]).norm();
+                let du = self.parameters.a / (1.0 + self.parameters.b * r_ij).powi(2);
+                derivative[i] += du * (r[i] - r[j]) / r_ij;
+                derivative[j] -= du * (r[i] - r[j]) / r_ij;
+            }
+        }
+
+        // Electron-nucleus interaction terms.
+        for i in 0..r.len() {
+            for nucleus_pos in &self.nucleus_positions {
+                let r_iI = (r[i] - nucleus_pos).norm();
+                let du = self.parameters.c / (1.0 + self.parameters.d * r_iI).powi(2);
+                derivative[i] += du * (r[i] - nucleus_pos) / r_iI;
+            }
+        }
+
+        derivative
+    }
+
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+        let mut laplacian = vec![0.0; r.len()];
+
+        // Electron-electron interaction terms.
+        for i in 0..r.len() {
+            for j in (i + 1)..r.len() {
+                let r_ij = (r[i] - r[j]).norm();
+                let du = self.parameters.a / (1.0 + self.parameters.b * r_ij).powi(2);
+                let d2 = -2.0 * self.parameters.a * self.parameters.b / (1.0 + self.parameters.b * r_ij).powi(3);
+                laplacian[i] += (d2 / r_ij + du) * (r[i] - r[j]).dot(&(r[i] - r[j])) / r_ij;
+                laplacian[j] += (d2 / r_ij + du) * (r[i] - r[j]).dot(&(r[i] - r[j])) / r_ij;
+            }
+        }
+
+        // Electron-nucleus interaction terms.
+        for i in 0..r.len() {
+            for nucleus_pos in &self.nucleus_positions {
+                let r_iI = (r[i] - nucleus_pos).norm();
+                let du = self.parameters.c / (1.0 + self.parameters.d * r_iI).powi(2);
+                let d2 = -2.0 * self.parameters.c * self.parameters.d / (1.0 + self.parameters.d * r_iI).powi(3);
+                laplacian[i] += (d2 / r_iI + du) * (r[i] - nucleus_pos).dot(&(r[i] - nucleus_pos)) / r_iI;
+            }
+        }
+
+        laplacian
+    }
+}
+
 fn u(r: f64, a: f64, b: f64) -> f64 {
     a * r / (1.0 + b * r)
 }
