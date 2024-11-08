@@ -399,7 +399,7 @@ impl MultiWfn for STOSlaterDet {
                     let b = 0.5;    // Example value
                     let du = du_dr(r_ij_norm, a_ij, b);
                     let d2u = d2u_dr2(r_ij_norm, a_ij, b);
-                    laplacian[i] += (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
+                    laplacian[i] += 2.0 * (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
                 }
             }
         }
