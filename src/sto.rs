@@ -390,19 +390,19 @@ impl MultiWfn for STOSlaterDet {
         }
 
         // // lapaclian of Jastrow factor
-        // for i in 0..self.n {
-        //     for j in 0..self.n {
-        //         if i != j {
-        //             let r_ij = r[i] - r[j];
-        //             let r_ij_norm = r_ij.norm();
-        //             let a_ij = 0.5; // Example value
-        //             let b = 0.5;    // Example value
-        //             let du = du_dr(r_ij_norm, a_ij, b);
-        //             let d2u = d2u_dr2(r_ij_norm, a_ij, b);
-        //             laplacian[i] += 2.0 * (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
-        //         }
-        //     }
-        // }
+        for i in 0..self.n {
+            for j in 0..self.n {
+                if i != j {
+                    let r_ij = r[i] - r[j];
+                    let r_ij_norm = r_ij.norm();
+                    let a_ij = 0.5; // Example value
+                    let b = 0.5;    // Example value
+                    let du = du_dr(r_ij_norm, a_ij, b);
+                    let d2u = d2u_dr2(r_ij_norm, a_ij, b);
+                    laplacian[i] += 0.5 * (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
+                }
+            }
+        }
         laplacian
     }
 }
