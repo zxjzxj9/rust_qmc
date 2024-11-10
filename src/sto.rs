@@ -304,22 +304,23 @@ impl MultiWfn for STOSlaterDet {
         // Calculate the determinant
         let psi_s = self.s.determinant();
 
-        // Compute the Jastrow factor
-        let mut jastrow = 0.0;
-        for i in 0..self.n {
-            for j in (i + 1)..self.n {
-                let r_ij = (r[i] - r[j]).norm();
-                // You may define a_ij and b as constants or functions of i and j
-                let a_ij = 0.5; // Example value
-                let b = 0.5;    // Example value
-                jastrow += u(r_ij, a_ij, b);
-            }
-        }
-        let j = f64::exp(jastrow);
+        // // Compute the Jastrow factor
+        // let mut jastrow = 0.0;
+        // for i in 0..self.n {
+        //     for j in (i + 1)..self.n {
+        //         let r_ij = (r[i] - r[j]).norm();
+        //         // You may define a_ij and b as constants or functions of i and j
+        //         let a_ij = 0.5; // Example value
+        //         let b = 0.5;    // Example value
+        //         jastrow += u(r_ij, a_ij, b);
+        //     }
+        // }
+        // let j = f64::exp(jastrow);
 
         // Update the inverse of the Slater matrix
         self.inv_s = self.s.clone().try_inverse().unwrap();
-        psi_s * j
+        // psi_s * j
+        psi_s
     }
 
     fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
@@ -335,28 +336,28 @@ impl MultiWfn for STOSlaterDet {
                     sum += self.inv_s[(j, i)] * grad_phi;
                 }
             }
-            derivative[i] = sum;
+            derivative[i] = psi*sum;
         }
 
-        // Compute gradients of the Jastrow factor
-        let mut grad_ln_j = vec![Vector3::zeros(); self.n];
-        for i in 0..self.n {
-            for j in 0..self.n {
-                if i != j {
-                    let r_ij = r[i] - r[j];
-                    let r_ij_norm = r_ij.norm();
-                    let a_ij = 0.5; // Example value
-                    let b = 0.5;    // Example value
-                    let du = du_dr(r_ij_norm, a_ij, b);
-                    grad_ln_j[i] += du * r_ij / r_ij_norm;
-                }
-            }
-        }
-
-        // Combine gradients
-        for i in 0..self.n {
-            derivative[i] = psi * (derivative[i] + grad_ln_j[i]);
-        }
+        // // Compute gradients of the Jastrow factor
+        // let mut grad_ln_j = vec![Vector3::zeros(); self.n];
+        // for i in 0..self.n {
+        //     for j in 0..self.n {
+        //         if i != j {
+        //             let r_ij = r[i] - r[j];
+        //             let r_ij_norm = r_ij.norm();
+        //             let a_ij = 0.5; // Example value
+        //             let b = 0.5;    // Example value
+        //             let du = du_dr(r_ij_norm, a_ij, b);
+        //             grad_ln_j[i] += du * r_ij / r_ij_norm;
+        //         }
+        //     }
+        // }
+        //
+        // // Combine gradients
+        // for i in 0..self.n {
+        //     derivative[i] = psi * (derivative[i] + grad_ln_j[i]);
+        // }
         derivative
     }
 
@@ -389,20 +390,20 @@ impl MultiWfn for STOSlaterDet {
             laplacian[i] = psi * (sum_lap + sum_grad_dot);
         }
 
-        // // lapaclian of Jastrow factor
-        for i in 0..self.n {
-            for j in 0..self.n {
-                if i != j {
-                    let r_ij = r[i] - r[j];
-                    let r_ij_norm = r_ij.norm();
-                    let a_ij = 0.5; // Example value
-                    let b = 0.5;    // Example value
-                    let du = du_dr(r_ij_norm, a_ij, b);
-                    let d2u = d2u_dr2(r_ij_norm, a_ij, b);
-                    laplacian[i] += 0.5 * (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
-                }
-            }
-        }
+        // lapaclian of Jastrow factor
+        // for i in 0..self.n {
+        //     for j in 0..self.n {
+        //         if i != j {
+        //             let r_ij = r[i] - r[j];
+        //             let r_ij_norm = r_ij.norm();
+        //             let a_ij = 0.5; // Example value
+        //             let b = 0.5;    // Example value
+        //             let du = du_dr(r_ij_norm, a_ij, b);
+        //             let d2u = d2u_dr2(r_ij_norm, a_ij, b);
+        //             laplacian[i] += 2.0 * (d2u / r_ij_norm + du) * r_ij.dot(&r_ij) / r_ij_norm;
+        //         }
+        //     }
+        // }
         laplacian
     }
 }

@@ -5,6 +5,7 @@ mod tests;
 mod wfn;
 mod sto;
 mod dmc;
+mod lattice;
 
 use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
