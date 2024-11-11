@@ -6,6 +6,7 @@ mod wfn;
 mod sto;
 mod dmc;
 mod lattice;
+mod jastrow;
 
 use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
