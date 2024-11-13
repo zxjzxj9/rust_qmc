@@ -194,4 +194,9 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_jastrow2_numerical_derivative_and_laplacian() {
+
+    }
+
 }
