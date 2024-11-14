@@ -7,6 +7,7 @@ mod tests {
     use rand::distributions::Uniform;
     use rand_distr::{Distribution, Normal};
     use crate::h2_mol::{Jastrow1, H2MoleculeVB, Slater1s};
+    use crate::jastrow::Jastrow2;
     use crate::wfn::{MultiWfn, SingleWfn};
     use crate::sto::{STO, STOSlaterDet, init_li_sto};
 
@@ -196,6 +197,11 @@ mod tests {
 
     #[test]
     fn test_jastrow2_numerical_derivative_and_laplacian() {
+        // add test for jastrow2
+        let jastrow2 = Jastrow2 {
+            num_electrons: 5,
+            F: 1.0,
+        };
 
     }
 
