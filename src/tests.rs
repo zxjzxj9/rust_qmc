@@ -198,11 +198,14 @@ mod tests {
     #[test]
     fn test_jastrow2_numerical_derivative_and_laplacian() {
         // add test for jastrow2
-        let jastrow2 = Jastrow2 {
+        let mut jastrow2 = Jastrow2 {
             num_electrons: 5,
             F: 1.0,
         };
 
+        let r = jastrow2.initialize();
+
+        let h = 1e-5;
     }
 
 }
