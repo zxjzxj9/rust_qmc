@@ -130,11 +130,14 @@ impl MultiWfn for Jastrow2 {
             let r_ij = r[i] - r[j];
             let r_ij_norm = r_ij.norm();
             let factor = 1.0 + r_ij_norm / self.F;
-            let grad_square = self.F / (2.0 * factor.powi(2) * r_ij_norm);
+            let psi = self.evaluate(r);
+            let denom = 2.0 * factor.powi(2);
+            let grad_square = denom.powi(-2);
             let laplacian_factor = 1.0 / (r_ij_norm * factor.powi(3));
-            let comp = (grad_square + laplacian_factor) * psi;
-            laplacians[i] += 2.0*comp;
-            laplacians[j] += 2.0*comp;
+            let comp = (grad_square + laplacian_factor) * psi ;
+
+            laplacians[i] += comp;
+            laplacians[j] += comp;
         }
         laplacians
     }

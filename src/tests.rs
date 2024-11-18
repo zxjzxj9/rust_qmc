@@ -199,7 +199,7 @@ mod tests {
     fn test_jastrow2_numerical_derivative_and_laplacian() {
         // add test for jastrow2
         let mut jastrow2 = Jastrow2 {
-            num_electrons: 5,
+            num_electrons: 4,
             F: 1.0,
         };
 
