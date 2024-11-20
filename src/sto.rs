@@ -1,6 +1,7 @@
 use nalgebra::{DMatrix, Matrix, Vector3};
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
+use crate::jastrow::Jastrow2;
 use crate::mcmc::EnergyCalculator;
 use crate::wfn::{MultiWfn, SingleWfn};
 
@@ -408,6 +409,50 @@ impl MultiWfn for STOSlaterDet {
     }
 }
 
+// combine sto and jastrow together for lithium atom
+pub(crate) struct Lithium {
+    pub(crate) sto: STOSlaterDet,
+    pub(crate) jastrow: Jastrow2,
+}
+
+impl MultiWfn for Lithium {
+    fn initialize(&mut self) -> Vec<Vector3<f64>> {
+        let r = self.sto.initialize();
+        r
+    }
+
+    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
+        let psi = self.sto.evaluate(r);
+        let jastrow = self.jastrow.evaluate(r);
+        psi * jastrow
+    }
+
+    fn derivative(&mut self, r: &Vec<Vector3<f64>) -> Vec<Vector3<f64>> {
+        let psi = self.sto.evaluate(r);
+        let jastrow = self.jastrow.evaluate(r);
+        let grad_psi = self.sto.derivative(r);
+        let grad_jastrow = self.jastrow.derivative(r);
+        let mut grad = vec![Vector3::zeros(); r.len()];
+        for i in 0..r.len() {
+            grad[i] = psi * grad_jastrow[i] + jastrow * grad_psi[i];
+        }
+        grad
+    }
+
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>) -> Vec<f64> {
+        let psi = self.sto.evaluate(r);
+        let jastrow = self.jastrow.evaluate(r);
+        let lap_psi = self.sto.laplacian(r);
+        let lap_jastrow = self.jastrow.laplacian(r);
+        let mut lap = vec![0.0; r.len()];
+        for i in 0..r.len() {
+            // tbd
+        }
+        lap
+    }
+}
+
+
 // implement energy for STO
 impl EnergyCalculator for STOSlaterDet {
     fn local_energy(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
@@ -445,3 +490,6 @@ impl EnergyCalculator for STOSlaterDet {
         kinetic_energy + potential_energy
     }
 }
+
+
+
