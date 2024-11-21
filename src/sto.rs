@@ -427,7 +427,7 @@ impl MultiWfn for Lithium {
         psi * jastrow
     }
 
-    fn derivative(&mut self, r: &Vec<Vector3<f64>) -> Vec<Vector3<f64>> {
+    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
         let psi = self.sto.evaluate(r);
         let jastrow = self.jastrow.evaluate(r);
         let grad_psi = self.sto.derivative(r);
@@ -439,7 +439,7 @@ impl MultiWfn for Lithium {
         grad
     }
 
-    fn laplacian(&mut self, r: &Vec<Vector3<f64>) -> Vec<f64> {
+    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
         let psi = self.sto.evaluate(r);
         let jastrow = self.jastrow.evaluate(r);
         let lap_psi = self.sto.laplacian(r);
@@ -447,6 +447,7 @@ impl MultiWfn for Lithium {
         let mut lap = vec![0.0; r.len()];
         for i in 0..r.len() {
             // tbd
+            lap[i] = psi * lap_jastrow[i] + jastrow * lap_psi[i];
         }
         lap
     }
