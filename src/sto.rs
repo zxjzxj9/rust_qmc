@@ -470,7 +470,8 @@ impl EnergyCalculator for STOSlaterDet {
             let mut sum_grad_dot = 0.0;
             for j in 0..self.n {
                 for k in 0..self.n {
-                    sum_grad_dot += self.inv_s[(j, i)] * self.inv_s[(k, i)] * self.sto[j].derivative(&r[i]).dot(&self.sto[k].derivative(&r[i]));
+                    sum_grad_dot += self.inv_s[(j, i)] * self.inv_s[(k, i)] *
+                        self.sto[j].derivative(&r[i]).dot(&self.sto[k].derivative(&r[i]));
                 }
             }
             laplacian[i] = psi * (sum_lap + sum_grad_dot);
