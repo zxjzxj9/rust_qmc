@@ -447,7 +447,8 @@ impl MultiWfn for Lithium {
         let mut lap = vec![0.0; r.len()];
         for i in 0..r.len() {
             // tbd
-            lap[i] = psi * lap_jastrow[i] + jastrow * lap_psi[i];
+            lap[i] = psi * lap_jastrow[i] + jastrow * lap_psi[i] +
+                2.0 * self.sto.derivative(r)[i].dot(&self.jastrow.derivative(r)[i]);
         }
         lap
     }
