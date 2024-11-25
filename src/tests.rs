@@ -225,4 +225,36 @@ mod tests {
         }
     }
 
+    fn test_lithium_atm_numerical_derivative_and_laplacian() {
+        let mut sto1 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 1, 0, 0);
+        let mut sto2 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 1, 0, 0);
+        let mut sto3 = init_li_sto(Vector3::new(0.0, 0.0, 0.0), 2, 0, 0);
+        let mut stodet = STOSlaterDet {
+            n: 3,
+            sto: vec![sto1, sto2, sto3],
+            spin: vec![1, -1, 1],
+            s: Default::default(),
+            inv_s: Default::default(),
+        };
+        let h = 1e-5;
+
+        let r = stodet.initialize();
+        // evaluate numerical derivative and laplacian
+        let analytical_grad = stodet.derivative(&r);
+        let numerical_grad = stodet.numerical_derivative(&r, h);
+        // assert they are close enough
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_grad[i].x, numerical_grad[i].x, epsilon = 1e-5);
+            assert_relative_eq!(analytical_grad[i].y, numerical_grad[i].y, epsilon = 1e-5);
+            assert_relative_eq!(analytical_grad[i].z, numerical_grad[i].z, epsilon = 1e-5);
+        }
+
+        // evaluate numerical laplacian
+        let analytical_laplacian = stodet.laplacian(&r);
+        let numerical_laplacian = stodet.numerical_laplacian(&r, h);
+        // assert they are close enough
+        for i in 0..r.len() {
+            assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
+        }
+    }
 }
