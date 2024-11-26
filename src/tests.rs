@@ -9,7 +9,7 @@ mod tests {
     use crate::h2_mol::{Jastrow1, H2MoleculeVB, Slater1s};
     use crate::jastrow::Jastrow2;
     use crate::wfn::{MultiWfn, SingleWfn};
-    use crate::sto::{STO, STOSlaterDet, init_li_sto};
+    use crate::sto::{STO, STOSlaterDet, init_li_sto, Lithium};
 
     #[test]
     fn test_jastrow1_evaluate() {
@@ -236,12 +236,21 @@ mod tests {
             s: Default::default(),
             inv_s: Default::default(),
         };
+        let mut jastrow2 = Jastrow2 {
+            num_electrons: 3,
+            F: 1.0,
+        };
+
+        let mut atom = Lithium {
+            sto: stodet,
+            jastrow: jastrow2,
+        };
         let h = 1e-5;
 
-        let r = stodet.initialize();
+        let r = atom.initialize();
         // evaluate numerical derivative and laplacian
-        let analytical_grad = stodet.derivative(&r);
-        let numerical_grad = stodet.numerical_derivative(&r, h);
+        let analytical_grad = atom.derivative(&r);
+        let numerical_grad = atom.numerical_derivative(&r, h);
         // assert they are close enough
         for i in 0..r.len() {
             assert_relative_eq!(analytical_grad[i].x, numerical_grad[i].x, epsilon = 1e-5);
@@ -250,8 +259,8 @@ mod tests {
         }
 
         // evaluate numerical laplacian
-        let analytical_laplacian = stodet.laplacian(&r);
-        let numerical_laplacian = stodet.numerical_laplacian(&r, h);
+        let analytical_laplacian = atom.laplacian(&r);
+        let numerical_laplacian = atom.numerical_laplacian(&r, h);
         // assert they are close enough
         for i in 0..r.len() {
             assert_relative_eq!(analytical_laplacian[i], numerical_laplacian[i], epsilon = 1e-5);
