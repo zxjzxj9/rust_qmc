@@ -494,5 +494,43 @@ impl EnergyCalculator for STOSlaterDet {
     }
 }
 
+impl EnergyCalculator for Lithium {
+    fn local_energy(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
+        let psi = self.sto.evaluate(r);
+        let jastrow = self.jastrow.evaluate(r);
+        let mut kinetic_energy = 0.0;
+        let mut potential_energy = 0.0;
+        let mut laplacian = vec![0.0; r.len()];
+        let mut grad = vec![Vector3::zeros(); r.len()];
+        for i in 0..r.len() {
+            let mut sum_lap = 0.0;
+            for j in 0..self.sto.n {
+                sum_lap += self.sto.inv_s[(j, i)] * self.sto.sto[j].laplacian(&r[i]);
+            }
+            let mut sum_grad_dot = 0.0;
+            for j in 0..self.sto.n {
+                for k in 0..self.sto.n {
+                    sum_grad_dot += self.sto.inv_s[(j, i)] * self.sto.inv_s[(k, i)] *
+                        self.sto.sto[j].derivative(&r[i]).dot(&self.sto.sto[k].derivative(&r[i]));
+                }
+            }
+            laplacian[i] = psi * (sum_lap + sum_grad_dot);
+            grad[i] = psi * self.sto.sto[i].derivative(&r[i]);
+        }
+        // Compute the kinetic energy
+        for i in 0..r.len() {
+            kinetic_energy += -0.5 * laplacian[i];
+        }
+        // Compute the potential energy
+        for i in 0..r.len() {
+            for j in 0..self.sto.n {
+                if self.sto.spin[i] == self.sto.spin[j] {
+                    potential_energy += -1.0 / (r[i] - self.sto.sto[j].R).norm();
+                }
+            }
+        }
+        kinetic_energy + potential_energy
+    }
+}
 
 
