@@ -12,6 +12,9 @@ use nalgebra::Vector3;
 use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
 use mcmc::{MCMCParams, MCMCSimulation, MCMCResults};
 use clap::Parser;
+use crate::jastrow::Jastrow2;
+use crate::sto::{init_li_sto, Lithium, STOSlaterDet};
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -38,8 +41,26 @@ fn main() {
     // read the config file, with command line argument, use clap mod to input the file name
     let args = Args::parse();
     // let h2 = conf::read_h2molecule_vb(&args.config);
-    let h2 = conf::read_h2molecule_mo(&args.config);
+    // let h2 = conf::read_h2molecule_mo(&args.config);
+    let mut sto1 = init_li_sto(Vector3::new(1.0, 0.0, 0.0), 1, 0, 0);
+    let mut sto2 = init_li_sto(Vector3::new(0.0, 1.0, 0.0), 1, 0, 0);
+    let mut sto3 = init_li_sto(Vector3::new(0.0, 0.0, 1.0), 2, 0, 0);
+    let mut stodet = STOSlaterDet {
+        n: 3,
+        sto: vec![sto1, sto2, sto3],
+        spin: vec![1, -1, 1],
+        s: Default::default(),
+        inv_s: Default::default(),
+    };
+    let mut jastrow2 = Jastrow2 {
+        num_electrons: 3,
+        F: 1.0,
+    };
 
+    let mut li_atom = Lithium {
+        sto: stodet,
+        jastrow: jastrow2,
+    };
 
     // Set up MCMC parameters
     let params = MCMCParams {
@@ -53,7 +74,7 @@ fn main() {
     };
 
     // Create and run the MCMC simulation
-    let mut simulation = MCMCSimulation::new(h2, params);
+    let mut simulation = MCMCSimulation::new(li_atom, params);
     let results = simulation.run();
 
     // Print results
