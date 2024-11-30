@@ -29,6 +29,14 @@ $\psi_n(r) = A \sum_{\nu=1}^{m} \phi_{\nu n} r^{p_{\nu}} \exp\left(-\xi_n r\righ
 with the following coefficients:
 A = 
 
+Calculation results for the Li atom:
+
+Number of walkers: 10
+Number of steps: 20000000
+Final energy: -2.029792 ± 0.000148 Ha
+Binding energy: -28.022057 ± 0.004034 eV
+Autocorrelation time: 1.04 steps
+
 
 ## ToDos
 
