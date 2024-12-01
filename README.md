@@ -37,6 +37,12 @@ Final energy: -2.029792 ± 0.000148 Ha
 Binding energy: -28.022057 ± 0.004034 eV
 Autocorrelation time: 1.04 steps
 
+Number of walkers: 10
+Number of steps: 20000000
+Final energy: -2.029456 ± 0.000148 Ha
+Binding energy: -28.012922 ± 0.004024 eV
+Autocorrelation time: 1.00 steps
+
 
 ## ToDos
 
