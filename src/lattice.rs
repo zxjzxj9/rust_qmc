@@ -7,3 +7,15 @@ pub struct LatticeVector {
 }
 
 // ewald summation code
+pub fn ewald() {
+    // define the lattice vector
+    let lattice_vector = LatticeVector {
+        lattice_vector: Matrix3::new(
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0
+        )
+    };
+    // print the lattice vector
+    println!("{:?}", lattice_vector);
+}
