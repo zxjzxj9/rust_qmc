@@ -208,3 +208,131 @@ impl Walker for LithiumCrystalWalker {
         self.marked_for_deletion = true;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_relative_eq;
+
+    #[test]
+    fn test_bcc_lattice_creation() {
+        let a = 3.51; // Lithium lattice constant
+        let lattice = LatticeVector::new_bcc(a);
+
+        // Check lattice vectors
+        assert_relative_eq!(lattice.lattice_vector[(0, 0)], -a/2.0);
+        assert_relative_eq!(lattice.lattice_vector[(0, 1)], a/2.0);
+        assert_relative_eq!(lattice.lattice_vector[(0, 2)], a/2.0);
+
+        // Check volume is correct for BCC
+        let volume = lattice.lattice_vector.determinant().abs();
+        let expected_volume = a*a*a / 2.0; // BCC unit cell volume = a³/2
+        assert_relative_eq!(volume, expected_volume, epsilon = 1e-10);
+
+        // Check reciprocal vectors
+        let det = lattice.lattice_vector.determinant();
+        assert_relative_eq!(
+            lattice.reciprocal_vector[(0, 0)],
+            2.0 * std::f64::consts::PI / det * 0.0
+        );
+    }
+
+    #[test]
+    fn test_minimum_image_distance() {
+        let a = 3.51;
+        let lattice = LatticeVector::new_bcc(a);
+
+        // Test points inside the same cell
+        let r1 = Vector3::new(0.1, 0.2, 0.3);
+        let r2 = Vector3::new(0.4, 0.5, 0.6);
+        let dr = lattice.minimum_image_distance(&r1, &r2);
+        assert_relative_eq!(dr.x, r1.x - r2.x, epsilon = 1e-10);
+        assert_relative_eq!(dr.y, r1.y - r2.y, epsilon = 1e-10);
+        assert_relative_eq!(dr.z, r1.z - r2.z, epsilon = 1e-10);
+
+        // Test points across periodic boundary
+        let r3 = Vector3::new(0.1, 0.2, 0.3);
+        let r4 = Vector3::new(a + 0.1, 0.2, 0.3); // Same point, but shifted by one lattice vector
+        let dr2 = lattice.minimum_image_distance(&r3, &r4);
+        // The minimum image should be much smaller than a
+        assert!(dr2.norm() < a/2.0);
+    }
+
+    #[test]
+    fn test_lithium_crystal_walker_creation() {
+        let dt = 0.01;
+        let eref = 0.0;
+        let walker = LithiumCrystalWalker::new(dt, eref);
+
+        // Check initialization
+        assert_eq!(walker.ion_positions.len(), 2); // BCC has 2 atoms per unit cell
+        assert_eq!(walker.electron_positions.len(), 6); // 6 electrons (3 from each Li)
+        assert_relative_eq!(walker.dt, dt);
+        assert_relative_eq!(walker.sdt, dt.sqrt());
+        assert!(!walker.marked_for_deletion);
+    }
+
+    #[test]
+    fn test_ewald_summation() {
+        let dt = 0.01;
+        let eref = 0.0;
+        let walker = LithiumCrystalWalker::new(dt, eref);
+
+        // Ewald sum for a simple case should be finite and non-zero
+        let ewald_energy = walker.calculate_ewald_sum();
+        assert!(ewald_energy.is_finite());
+        assert!(ewald_energy != 0.0);
+
+        // The energy should be positive for repulsive ion-ion interactions
+        assert!(ewald_energy > 0.0);
+    }
+
+    #[test]
+    fn test_walker_movement() {
+        let dt = 0.01;
+        let eref = 0.0;
+        let mut walker = LithiumCrystalWalker::new(dt, eref);
+
+        // Save initial positions
+        let initial_positions = walker.electron_positions.clone();
+
+        // Move walker
+        walker.move_walker();
+
+        // Positions should change
+        let mut changed = false;
+        for (i, pos) in walker.electron_positions.iter().enumerate() {
+            if (pos - initial_positions[i]).norm() > 1e-10 {
+                changed = true;
+                break;
+            }
+        }
+        assert!(changed, "Electron positions did not change after move_walker()");
+
+        // All positions should be within the unit cell
+        let a = walker.lattice.lattice_vector.diagonal().x;
+        for pos in &walker.electron_positions {
+            assert!(pos.x >= 0.0 && pos.x < a);
+            assert!(pos.y >= 0.0 && pos.y < a);
+            assert!(pos.z >= 0.0 && pos.z < a);
+        }
+    }
+
+    #[test]
+    fn test_local_energy_calculation() {
+        let dt = 0.01;
+        let eref = 0.0;
+        let mut walker = LithiumCrystalWalker::new(dt, eref);
+
+        // Energy should be calculated during creation
+        let initial_energy = walker.energy;
+        assert!(initial_energy.is_finite());
+
+        // Move walker and recalculate energy
+        walker.move_walker();
+        walker.calculate_local_energy();
+
+        // Energy should change
+        assert_ne!(initial_energy, walker.energy);
+    }
+}
