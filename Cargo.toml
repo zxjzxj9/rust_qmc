@@ -11,6 +11,7 @@ rand_distr = "0.4.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_yaml = "0.9.34+deprecated"
 clap = { version = "4.5.19", features = ["derive"] }
+statrs = "0.18.0"
 
 # add o3 optimization flag
 [profile.release]

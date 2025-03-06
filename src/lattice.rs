@@ -3,6 +3,7 @@ use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use crate::dmc::{Walker, BranchingResult};
 use crate::mcmc::EnergyCalculator;
+use statrs;
 
 const MAX_CLONES: i32 = 3;
 
@@ -73,7 +74,7 @@ impl LithiumCrystalWalker {
                     }
 
                     let r = a * f64::sqrt((nx*nx + ny*ny + nz*nz) as f64);
-                    v_ewald += 1.0/r * f64::erfc(alpha * r);
+                    v_ewald += 1.0/r * statrs::function::erfc(alpha * r);
                 }
             }
         }
