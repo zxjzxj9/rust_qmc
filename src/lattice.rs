@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::BufWriter;
 use nalgebra::{Matrix3, Vector3};
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
@@ -208,6 +210,145 @@ impl Walker for LithiumCrystalWalker {
 
     fn mark_for_deletion(&mut self) {
         self.marked_for_deletion = true;
+    }
+}
+
+
+pub trait VmcWalker: Sized {
+    fn new() -> Self;
+    fn move_walker(&mut self) -> (bool, f64);
+    fn calculate_local_energy(&mut self) -> f64;
+    fn get_positions(&self) -> &Vec<Vector3<f64>>;
+}
+
+impl VmcWalker for LithiumCrystalWalker {
+    fn new() -> Self {
+        let dt = 0.01; // Default step size for VMC
+        let eref = 0.0;
+        Self::new(dt, eref)
+    }
+
+    fn move_walker(&mut self) -> (bool, f64) {
+        // Save current positions
+        let old_positions = self.electron_positions.clone();
+        let old_energy = self.energy;
+
+        // Attempt a move
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, self.sdt).unwrap();
+
+        // Randomly select one electron to move
+        let electron_idx = rng.gen_range(0..self.electron_positions.len());
+        let old_pos = self.electron_positions[electron_idx];
+        self.electron_positions[electron_idx] += Vector3::<f64>::from_distribution(&dist, &mut rng);
+
+        // Apply periodic boundary conditions
+        let pos = &mut self.electron_positions[electron_idx];
+        *pos = Vector3::new(
+            pos.x.rem_euclid(self.lattice.lattice_vector.diagonal().x),
+            pos.y.rem_euclid(self.lattice.lattice_vector.diagonal().y),
+            pos.z.rem_euclid(self.lattice.lattice_vector.diagonal().z)
+        );
+
+        // Calculate new energy and wavefunction ratio
+        self.calculate_local_energy();
+
+        // In VMC we only need energy for acceptance;
+        // for a real wavefunction trial, we'd use |Ψ_new|²/|Ψ_old|²
+        let ratio = (-self.energy + old_energy).exp();
+        let accept = ratio > rng.gen::<f64>();
+
+        if !accept {
+            // Reject move, restore old positions
+            self.electron_positions[electron_idx] = old_pos;
+            self.energy = old_energy;
+        }
+
+        (accept, ratio)
+    }
+
+    fn calculate_local_energy(&mut self) -> f64 {
+        self.calculate_local_energy();
+        self.energy
+    }
+
+    fn get_positions(&self) -> &Vec<Vector3<f64>> {
+        &self.electron_positions
+    }
+}
+
+pub fn run_vmc_sampling<T: VmcWalker>() {
+    let n_equilibration = 1000;   // Steps for equilibration
+    let n_steps = 10000;          // Production steps
+    let n_blocks = 10;            // Number of blocks for block averaging
+
+    let mut walker = T::new();
+    let mut energies = Vec::with_capacity(n_steps);
+    let mut acceptance_ratio = 0.0;
+
+    println!("Starting VMC equilibration...");
+    // Equilibration phase
+    for _ in 0..n_equilibration {
+        let (accepted, _) = walker.move_walker();
+        if accepted {
+            acceptance_ratio += 1.0;
+        }
+    }
+    acceptance_ratio /= n_equilibration as f64;
+    println!("Equilibration complete. Acceptance ratio: {:.4}", acceptance_ratio);
+
+    println!("Starting VMC production...");
+    acceptance_ratio = 0.0;
+
+    // Production phase
+    for step in 0..n_steps {
+        let (accepted, _) = walker.move_walker();
+        if accepted {
+            acceptance_ratio += 1.0;
+        }
+
+        let energy = walker.calculate_local_energy();
+        energies.push(energy);
+
+        if (step + 1) % (n_steps / 20) == 0 {
+            println!("Step {}/{}: Energy = {:.6}", step + 1, n_steps, energy);
+        }
+    }
+    acceptance_ratio /= n_steps as f64;
+
+    // Calculate statistics using block averaging
+    let block_size = n_steps / n_blocks;
+    let mut block_means = Vec::with_capacity(n_blocks);
+
+    for i in 0..n_blocks {
+        let start = i * block_size;
+        let end = start + block_size;
+        let block_mean = energies[start..end].iter().sum::<f64>() / block_size as f64;
+        block_means.push(block_mean);
+    }
+
+    let mean_energy = block_means.iter().sum::<f64>() / n_blocks as f64;
+    let variance = block_means.iter()
+        .map(|&e| (e - mean_energy).powi(2))
+        .sum::<f64>() / (n_blocks - 1) as f64;
+    let std_error = (variance / n_blocks as f64).sqrt();
+
+    println!("VMC Results:");
+    println!("Acceptance ratio: {:.4}", acceptance_ratio);
+    println!("Mean energy: {:.6} ± {:.6}", mean_energy, std_error);
+
+    // Save results
+    let file = File::create("vmc_energies.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    for (i, energy) in energies.iter().enumerate() {
+        writeln!(writer, "{} {}", i, energy).unwrap();
+    }
+
+    // Save final configuration
+    let file = File::create("vmc_positions.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    for pos in walker.get_positions().iter() {
+        writeln!(writer, "{} {} {}", pos.x, pos.y, pos.z).unwrap();
     }
 }
 
