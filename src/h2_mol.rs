@@ -1,124 +1,76 @@
-// simple qmc for h2 molecule
+//! Simple QMC implementation for the H₂ molecule
+//!
+//! Supports both Valence Bond (VB) and Molecular Orbital (MO) wavefunctions.
 
-// import vec3 library
-extern crate nalgebra as na;
-use na::Vector3;
-use rand_distr::Normal;
+use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
+use crate::jastrow::Jastrow1;
 use crate::mcmc::EnergyCalculator;
 use crate::wfn::{MultiWfn, SingleWfn};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct Slater1s {
-    pub(crate) alpha: f64,
-    pub(crate) R: Vector3<f64>,
+/// Slater 1s orbital centered at position `center` with exponent `alpha`.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Slater1s {
+    /// Orbital exponent
+    pub alpha: f64,
+    /// Center position of the orbital
+    pub center: Vector3<f64>,
 }
 
 impl SingleWfn for Slater1s {
-    /// Evaluates the Slater 1s wavefunction at position `r`.
-    fn evaluate(&mut self, r: &Vector3<f64>) -> f64 {
-        let r_minus_R = r - self.R;
-        let r_norm = r_minus_R.norm();
-        (-self.alpha * r_norm).exp()
+    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
+        let dr = r - self.center;
+        (-self.alpha * dr.norm()).exp()
     }
 
-    /// Computes the gradient (first derivative) of the Slater 1s wavefunction at position `r`.
-    fn derivative(&mut self, r: &Vector3<f64>) -> Vector3<f64> {
-        let r_minus_R = r - self.R;
-        let r_norm = r_minus_R.norm();
+    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64> {
+        let dr = r - self.center;
+        let r_norm = dr.norm();
         if r_norm == 0.0 {
-            return Vector3::new(0.0, 0.0, 0.0); // Avoid division by zero
+            return Vector3::zeros();
         }
         let scalar = -self.alpha / r_norm * (-self.alpha * r_norm).exp();
-        r_minus_R * scalar
+        dr * scalar
     }
 
-    /// Computes the Laplacian (second derivative) of the Slater 1s wavefunction at position `r`.
-    fn laplacian(&mut self, r: &Vector3<f64>) -> f64 {
-        let r_minus_R = r - self.R;
-        let r_norm = r_minus_R.norm();
+    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+        let dr = r - self.center;
+        let r_norm = dr.norm();
         if r_norm == 0.0 {
-            return f64::NEG_INFINITY; // Handle singularity at r = R
+            return f64::NEG_INFINITY;
         }
         let exp_part = (-self.alpha * r_norm).exp();
-        let laplacian = (self.alpha.powi(2) - 2.0 * self.alpha / r_norm) * exp_part;
-        laplacian
+        (self.alpha.powi(2) - 2.0 * self.alpha / r_norm) * exp_part
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct Jastrow1 {
-    pub(crate) F: f64,
+// Re-export Jastrow1 for backwards compatibility
+pub use crate::jastrow::Jastrow1;
+
+/// H₂ molecule with Valence Bond (VB) wavefunction.
+///
+/// The VB wavefunction is: Ψ = (φ₁(r₁)φ₂(r₁)) × (φ₁(r₂)φ₂(r₂)) × J(r₁₂)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct H2MoleculeVB {
+    /// First hydrogen atom orbital
+    pub orbital1: Slater1s,
+    /// Second hydrogen atom orbital
+    pub orbital2: Slater1s,
+    /// Jastrow correlation factor
+    pub jastrow: Jastrow1,
 }
 
-impl MultiWfn for Jastrow1 {
-
-    /// Initializes the Jastrow 1 wavefunction by sampling two random positions from a normal distribution.
-    fn initialize(&mut self) -> Vec<Vector3<f64>> {
-        let mut rng = rand::thread_rng();
-        let dist = Normal::new(0.0, 1.0).unwrap();
-        vec![
-            Vector3::<f64>::from_distribution(&dist, &mut rng),
-            Vector3::<f64>::from_distribution(&dist, &mut rng),
-        ]
-    }
-
-    /// Evaluates the Jastrow 1 wavefunction at positions `r`.
-    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
-        let r12_norm = r12.norm();
-        (-self.F / (2.0 * (1.0 + r12_norm / self.F))).exp()
-    }
-
-    /// Computes the gradient (first derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
-        let r12_norm = r12.norm();
-        let psi = self.evaluate(r);
-        let denom = 2.0 * (1.0 + r12_norm / self.F).powi(2) * r12_norm;
-        let grad_factor = psi / denom; // Removed the negative sign here
-
-        vec![
-            grad_factor * r12,
-            -grad_factor * r12,
-        ]
-    }
-
-    /// Computes the Laplacian (second derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
-        let r12_norm = r12.norm();
-        let factor = 1.0 + r12_norm / self.F;
-        let psi = self.evaluate(r);
-        let denom = 2.0 * factor.powi(2);
-        let grad_square = denom.powi(-2);
-        let laplacian_factor = 1.0 / (r12_norm * factor.powi(3));
-        let comp = (grad_square + laplacian_factor) * psi ;
-        vec![
-            comp,
-            comp
-        ]
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct H2MoleculeVB {
-    pub(crate) H1: Slater1s,
-    pub(crate) H2: Slater1s,
-    pub(crate) J: Jastrow1,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct H2MoleculeMO {
-    pub(crate) H1: Slater1s,
-    pub(crate) H2: Slater1s,
-    pub(crate) J: Jastrow1,
+/// H₂ molecule with Molecular Orbital (MO/LCAO) wavefunction.
+///
+/// The MO wavefunction is: Ψ = (φ₁(r₁)+φ₂(r₁)) × (φ₁(r₂)+φ₂(r₂)) × J(r₁₂)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct H2MoleculeMO {
+    /// First hydrogen atom orbital
+    pub orbital1: Slater1s,
+    /// Second hydrogen atom orbital  
+    pub orbital2: Slater1s,
+    /// Jastrow correlation factor
+    pub jastrow: Jastrow1,
 }
 
 impl MultiWfn for H2MoleculeVB {
