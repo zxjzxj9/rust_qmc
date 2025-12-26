@@ -1,19 +1,24 @@
-// this file encodes useful jastrow factors
+//! Jastrow correlation factors for QMC calculations.
+//!
+//! Jastrow factors capture electron-electron correlations that are
+//! difficult to represent with single-particle orbitals.
 
 use nalgebra::Vector3;
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
 use crate::wfn::MultiWfn;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct Jastrow1 {
-    pub(crate) F: f64,
+/// Two-electron Jastrow factor: J(r₁₂) = exp(-F / (2(1 + r₁₂/F)))
+///
+/// Used for H₂ molecule and similar two-electron systems.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Jastrow1 {
+    /// Correlation parameter controlling electron-electron cusp
+    pub cusp_param: f64,
 }
 
 impl MultiWfn for Jastrow1 {
-
-    /// Initializes the Jastrow 1 wavefunction by sampling two random positions from a normal distribution.
-    fn initialize(&mut self) -> Vec<Vector3<f64>> {
+    fn initialize(&self) -> Vec<Vector3<f64>> {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, 1.0).unwrap();
         vec![
@@ -22,73 +27,54 @@ impl MultiWfn for Jastrow1 {
         ]
     }
 
-    /// Evaluates the Jastrow 1 wavefunction at positions `r`.
-    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
-        let r12_norm = r12.norm();
-        (-self.F / (2.0 * (1.0 + r12_norm / self.F))).exp()
+    fn evaluate(&self, r: &[Vector3<f64>]) -> f64 {
+        let r12_norm = (r[0] - r[1]).norm();
+        (-self.cusp_param / (2.0 * (1.0 + r12_norm / self.cusp_param))).exp()
     }
 
-    /// Computes the gradient (first derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
+    fn derivative(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        let r12 = r[0] - r[1];
         let r12_norm = r12.norm();
         let psi = self.evaluate(r);
-        let denom = 2.0 * (1.0 + r12_norm / self.F).powi(2) * r12_norm;
-        let grad_factor = psi / denom; // Removed the negative sign here
-
-        vec![
-            grad_factor * r12,
-            -grad_factor * r12,
-        ]
+        let denom = 2.0 * (1.0 + r12_norm / self.cusp_param).powi(2) * r12_norm;
+        let grad_factor = psi / denom;
+        vec![grad_factor * r12, -grad_factor * r12]
     }
 
-    /// Computes the Laplacian (second derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
-        let r1 = &r[0];
-        let r2 = &r[1];
-        let r12 = r1 - r2;
-        let r12_norm = r12.norm();
-        let factor = 1.0 + r12_norm / self.F;
+    fn laplacian(&self, r: &[Vector3<f64>]) -> Vec<f64> {
+        let r12_norm = (r[0] - r[1]).norm();
+        let factor = 1.0 + r12_norm / self.cusp_param;
         let psi = self.evaluate(r);
         let denom = 2.0 * factor.powi(2);
         let grad_square = denom.powi(-2);
         let laplacian_factor = 1.0 / (r12_norm * factor.powi(3));
-        let comp = (grad_square + laplacian_factor) * psi ;
-        vec![
-            comp,
-            comp
-        ]
+        let comp = (grad_square + laplacian_factor) * psi;
+        vec![comp, comp]
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct Jastrow2 {
-    pub(crate) F: f64,
-    pub(crate) num_electrons: usize, // Added to keep track of the number of electrons
+/// Multi-electron Jastrow factor for N electrons.
+///
+/// J(r) = exp(-Σᵢ<ⱼ F / (2(1 + rᵢⱼ/F)))
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Jastrow2 {
+    /// Correlation parameter
+    pub cusp_param: f64,
+    /// Number of electrons
+    pub num_electrons: usize,
 }
 
 impl Jastrow2 {
-    /// Helper function to compute all unique pairs (i, j) with i < j
-    fn all_unique_pairs(&mut self) -> Vec<(usize, usize)> {
-        let mut pairs = Vec::new();
-        for i in 0..self.num_electrons {
-            for j in (i + 1)..self.num_electrons {
-                pairs.push((i, j));
-            }
-        }
-        pairs
+    /// Generate all unique electron pairs (i, j) with i < j.
+    fn unique_pairs(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        (0..self.num_electrons).flat_map(move |i| {
+            ((i + 1)..self.num_electrons).map(move |j| (i, j))
+        })
     }
 }
 
 impl MultiWfn for Jastrow2 {
-
-    /// Initializes the Jastrow 1 wavefunction by sampling `num_electrons` random positions from a normal distribution.
-    fn initialize(&mut self) -> Vec<Vector3<f64>> {
+    fn initialize(&self) -> Vec<Vector3<f64>> {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, 1.0).unwrap();
         (0..self.num_electrons)
@@ -96,46 +82,42 @@ impl MultiWfn for Jastrow2 {
             .collect()
     }
 
-    /// Evaluates the Jastrow 1 wavefunction at positions `r`.
-    fn evaluate(&mut self, r: &Vec<Vector3<f64>>) -> f64 {
-        let mut sum = 0.0;
-        for (i, j) in self.all_unique_pairs() {
-            let r_ij = r[i] - r[j];
-            let r_ij_norm = r_ij.norm();
-            sum += -self.F / (2.0 * (1.0 + r_ij_norm / self.F));
-        }
+    fn evaluate(&self, r: &[Vector3<f64>]) -> f64 {
+        let sum: f64 = self.unique_pairs()
+            .map(|(i, j)| {
+                let r_ij_norm = (r[i] - r[j]).norm();
+                -self.cusp_param / (2.0 * (1.0 + r_ij_norm / self.cusp_param))
+            })
+            .sum();
         sum.exp()
     }
 
-    /// Computes the gradient (first derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn derivative(&mut self, r: &Vec<Vector3<f64>>) -> Vec<Vector3<f64>> {
+    fn derivative(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         let mut gradients = vec![Vector3::zeros(); self.num_electrons];
         let psi = self.evaluate(r);
-        for (i, j) in self.all_unique_pairs() {
+        
+        for (i, j) in self.unique_pairs() {
             let r_ij = r[i] - r[j];
             let r_ij_norm = r_ij.norm();
-            let factor = self.F / (2.0 * (1.0 + r_ij_norm / self.F).powi(2) * r_ij_norm) * psi;
-            let grad_contribution = factor * r_ij;
-            gradients[i] += grad_contribution;
-            gradients[j] -= grad_contribution;
+            let factor = self.cusp_param / (2.0 * (1.0 + r_ij_norm / self.cusp_param).powi(2) * r_ij_norm) * psi;
+            let grad = factor * r_ij;
+            gradients[i] += grad;
+            gradients[j] -= grad;
         }
         gradients
     }
 
-    /// Computes the Laplacian (second derivative) of the Jastrow 1 wavefunction at positions `r`.
-    fn laplacian(&mut self, r: &Vec<Vector3<f64>>) -> Vec<f64> {
+    fn laplacian(&self, r: &[Vector3<f64>]) -> Vec<f64> {
         let mut laplacians = vec![0.0; self.num_electrons];
         let psi = self.evaluate(r);
-        for (i, j) in self.all_unique_pairs() {
-            let r_ij = r[i] - r[j];
-            let r_ij_norm = r_ij.norm();
-            let factor = 1.0 + r_ij_norm / self.F;
-            let psi = self.evaluate(r);
+        
+        for (i, j) in self.unique_pairs() {
+            let r_ij_norm = (r[i] - r[j]).norm();
+            let factor = 1.0 + r_ij_norm / self.cusp_param;
             let denom = 2.0 * factor.powi(2);
             let grad_square = denom.powi(-2);
             let laplacian_factor = 1.0 / (r_ij_norm * factor.powi(3));
-            let comp = (grad_square + laplacian_factor) * psi ;
-
+            let comp = (grad_square + laplacian_factor) * psi;
             laplacians[i] += comp;
             laplacians[j] += comp;
         }

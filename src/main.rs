@@ -1,71 +1,64 @@
-mod h2_mol;
-mod mcmc;
 mod conf;
+mod dmc;
+mod h2_mol;
+mod jastrow;
+mod lattice;
+mod mcmc;
+mod sto;
 mod tests;
 mod wfn;
-mod sto;
-mod dmc;
-mod lattice;
-mod jastrow;
 
-use nalgebra::Vector3;
-use h2_mol::{H2MoleculeVB, Slater1s, Jastrow1};
-use mcmc::{MCMCParams, MCMCSimulation, MCMCResults};
 use clap::Parser;
+use nalgebra::Vector3;
+
 use crate::jastrow::Jastrow2;
+use crate::mcmc::{MCMCParams, MCMCSimulation};
 use crate::sto::{init_li_sto, Lithium, STOSlaterDet};
 
+/// Quantum Monte Carlo simulation program.
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, about = "Quantum Monte Carlo simulation", long_about = None)]
 struct Args {
+    /// Configuration file path
     #[arg(short, long, default_value = "config.yml")]
     config: String,
+    
+    /// Number of MCMC walkers
+    #[arg(short = 'w', long, default_value_t = 10)]
+    walkers: usize,
+    
+    /// Number of MCMC steps
+    #[arg(short = 'n', long, default_value_t = 20_000_000)]
+    steps: usize,
 }
 
-const Ha_TO_eV: f64 = 27.21138602;
+/// Hartree to eV conversion factor
+const HA_TO_EV: f64 = 27.21138602;
 
 fn main() {
-    // Set up the H2 molecule
-    // let h2 = H2MoleculeVB {
-    //     H1: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, 0.7) },
-    //     H2: Slater1s { alpha: 1.0, R: Vector3::new(0.0, 0.0, -0.7) },
-    //     J: Jastrow1 { F: 1.0 },
-    // };
-
-
-    // dmc::run_dmc_sampling::<dmc::HarmonicWalker>();
-    // dmc::run_dmc_sampling::<dmc::HydrogenAtomWalker>();
-    // dmc::run_dmc_sampling::<dmc::HydrogenMoleculeWalker>();
-    // return;
-
-    // read the config file, with command line argument, use clap mod to input the file name
     let args = Args::parse();
-    // let h2 = conf::read_h2molecule_vb(&args.config);
-    // let h2 = conf::read_h2molecule_mo(&args.config);
-    let mut sto1 = init_li_sto(Vector3::new(1.0, 0.0, 0.0), 1, 0, 0);
-    let mut sto2 = init_li_sto(Vector3::new(0.0, 1.0, 0.0), 1, 0, 0);
-    let mut sto3 = init_li_sto(Vector3::new(0.0, 0.0, 1.0), 2, 0, 0);
-    let mut stodet = STOSlaterDet {
-        n: 3,
-        sto: vec![sto1, sto2, sto3],
-        spin: vec![1, -1, 1],
-        s: Default::default(),
-        inv_s: Default::default(),
-    };
-    let mut jastrow2 = Jastrow2 {
+    
+    // Build Lithium atom wavefunction
+    // Three electrons: 1s↑, 1s↓, 2s↑ (all centered at origin)
+    let origin = Vector3::zeros();
+    let orbitals = vec![
+        init_li_sto(origin, 1, 0, 0),  // 1s
+        init_li_sto(origin, 1, 0, 0),  // 1s  
+        init_li_sto(origin, 2, 0, 0),  // 2s
+    ];
+    let spins = vec![1, -1, 1];  // ↑↓↑
+    
+    let slater_det = STOSlaterDet::new(orbitals, spins);
+    let jastrow = Jastrow2 {
+        cusp_param: 1.0,
         num_electrons: 3,
-        F: 1.0,
     };
+    let li_atom = Lithium::new(slater_det, jastrow);
 
-    let mut li_atom = Lithium {
-        sto: stodet,
-        jastrow: jastrow2,
-    };
-
-    // Set up MCMC parameters
+    // MCMC parameters
     let params = MCMCParams {
-        n_walkers: 10,
-        n_steps: 20000000,
+        n_walkers: args.walkers,
+        n_steps: args.steps,
         initial_step_size: 1.0,
         max_step_size: 2.0,
         min_step_size: 0.2,
@@ -73,33 +66,21 @@ fn main() {
         adaptation_interval: 100,
     };
 
-    // Create and run the MCMC simulation
+    // Run simulation
+    println!("Starting VMC simulation for Lithium atom");
+    println!("=========================================");
+    println!("Walkers: {}", params.n_walkers);
+    println!("Steps: {}", params.n_steps);
+    println!();
+    
     let mut simulation = MCMCSimulation::new(li_atom, params);
     let results = simulation.run();
 
     // Print results
-    println!("MCMC Simulation Results for H2 Molecule");
-    println!("----------------------------------------");
-    println!("Number of walkers: {}", params.n_walkers);
-    println!("Number of steps: {}", params.n_steps);
-    println!("Final energy: {:.6} ± {:.6} Ha", results.energy, results.error);
-    println!("Binding energy: {:.6} ± {:.6} eV", Ha_TO_eV * (results.energy + 1.0), Ha_TO_eV * results.error);
+    println!();
+    println!("Results");
+    println!("-------");
+    println!("Energy: {:.6} ± {:.6} Ha", results.energy, results.error);
+    println!("Energy: {:.4} ± {:.4} eV", results.energy * HA_TO_EV, results.error * HA_TO_EV);
     println!("Autocorrelation time: {:.2} steps", results.autocorrelation_time);
-
-    // Calculate and print average energy for the second half of the simulation
-    // let mid_point = results.energies.len() / 2;
-    // let avg_energy: f64 = results.energies[mid_point..].iter().sum::<f64>() / (results.energies.len() - mid_point) as f64;
-    // println!("Average energy (second half): {:.6} Ha", avg_energy);
-
-    // Optional: Plot energy convergence
-    // plot_energy_convergence(&results);
-}
-
-fn plot_energy_convergence(results: &MCMCResults) {
-    // This is a placeholder for plotting functionality.
-    // You would typically use a plotting library like plotters or gnuplot here.
-    println!("Plotting energy convergence...");
-    println!("X-axis: MCMC steps");
-    println!("Y-axis: Energy (Ha)");
-    // println!("Data points: {:?}", results.energies);
 }
