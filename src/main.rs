@@ -1,19 +1,12 @@
-mod conf;
-mod dmc;
-mod h2_mol;
-mod jastrow;
-mod lattice;
-mod mcmc;
-mod sto;
-mod tests;
-mod wfn;
+//! Quantum Monte Carlo simulation program.
 
 use clap::Parser;
 use nalgebra::Vector3;
 
-use crate::jastrow::Jastrow2;
-use crate::mcmc::{MCMCParams, MCMCSimulation};
-use crate::sto::{init_li_sto, Lithium, STOSlaterDet};
+use rust_qmc::correlation::Jastrow2;
+use rust_qmc::sampling::{MCMCParams, MCMCSimulation};
+use rust_qmc::wavefunction::{init_li_sto, STOSlaterDet};
+use rust_qmc::systems::Lithium;
 
 /// Quantum Monte Carlo simulation program.
 #[derive(Parser, Debug)]

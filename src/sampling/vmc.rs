@@ -5,7 +5,8 @@
 use nalgebra::Vector3;
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
-use crate::wfn::MultiWfn;
+use crate::wavefunction::MultiWfn;
+use super::traits::EnergyCalculator;
 
 /// Parameters for MCMC simulation.
 #[derive(Copy, Clone, Debug)]
@@ -31,11 +32,6 @@ pub struct MCMCResults {
     pub energy: f64,
     pub error: f64,
     pub autocorrelation_time: f64,
-}
-
-/// Trait for computing local energy from electron positions.
-pub trait EnergyCalculator {
-    fn local_energy(&self, positions: &[Vector3<f64>]) -> f64;
 }
 
 /// MCMC simulation engine for variational Monte Carlo.

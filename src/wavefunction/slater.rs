@@ -1,13 +1,45 @@
-//! Slater-Type Orbital (STO) basis functions.
-//!
-//! Provides STO basis functions for atomic calculations, particularly for Lithium.
+//! Slater-Type Orbital (STO) and Slater 1s basis functions.
 
 use nalgebra::{DMatrix, Vector3};
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
-use crate::jastrow::Jastrow2;
-use crate::mcmc::EnergyCalculator;
-use crate::wfn::{MultiWfn, SingleWfn};
+use super::traits::{MultiWfn, SingleWfn};
+
+/// Slater 1s orbital centered at position `center` with exponent `alpha`.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Slater1s {
+    /// Orbital exponent
+    pub alpha: f64,
+    /// Center position of the orbital
+    pub center: Vector3<f64>,
+}
+
+impl SingleWfn for Slater1s {
+    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
+        let dr = r - self.center;
+        (-self.alpha * dr.norm()).exp()
+    }
+
+    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64> {
+        let dr = r - self.center;
+        let r_norm = dr.norm();
+        if r_norm == 0.0 {
+            return Vector3::zeros();
+        }
+        let scalar = -self.alpha / r_norm * (-self.alpha * r_norm).exp();
+        dr * scalar
+    }
+
+    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+        let dr = r - self.center;
+        let r_norm = dr.norm();
+        if r_norm == 0.0 {
+            return f64::NEG_INFINITY;
+        }
+        let exp_part = (-self.alpha * r_norm).exp();
+        (self.alpha.powi(2) - 2.0 * self.alpha / r_norm) * exp_part
+    }
+}
 
 /// Slater-Type Orbital (STO) basis function.
 ///
@@ -129,7 +161,6 @@ pub struct STOSlaterDet {
     pub inv_slater_matrix: DMatrix<f64>,
 }
 
-
 impl STOSlaterDet {
     /// Create a new Slater determinant.
     pub fn new(orbitals: Vec<STO>, spins: Vec<i32>) -> Self {
@@ -144,6 +175,7 @@ impl STOSlaterDet {
     }
 
     /// Update the Slater matrix and its inverse for given positions.
+    #[allow(dead_code)]
     fn update_matrices(&mut self, r: &[Vector3<f64>]) {
         let n = self.num_electrons;
         self.slater_matrix = DMatrix::zeros(n, n);
@@ -237,99 +269,3 @@ impl MultiWfn for STOSlaterDet {
             .collect()
     }
 }
-
-/// Lithium atom wavefunction: Slater determinant × Jastrow factor.
-pub struct Lithium {
-    pub slater: STOSlaterDet,
-    pub jastrow: Jastrow2,
-}
-
-impl Lithium {
-    /// Create a new Lithium atom wavefunction.
-    pub fn new(slater: STOSlaterDet, jastrow: Jastrow2) -> Self {
-        Self { slater, jastrow }
-    }
-}
-
-impl MultiWfn for Lithium {
-    fn initialize(&self) -> Vec<Vector3<f64>> {
-        self.slater.initialize()
-    }
-
-    fn evaluate(&self, r: &[Vector3<f64>]) -> f64 {
-        self.slater.evaluate(r) * self.jastrow.evaluate(r)
-    }
-
-    fn derivative(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
-        let psi = self.slater.evaluate(r);
-        let j = self.jastrow.evaluate(r);
-        let grad_psi = self.slater.derivative(r);
-        let grad_j = self.jastrow.derivative(r);
-        
-        grad_psi.into_iter()
-            .zip(grad_j.into_iter())
-            .map(|(gp, gj)| j * gp + psi * gj)
-            .collect()
-    }
-
-    fn laplacian(&self, r: &[Vector3<f64>]) -> Vec<f64> {
-        let psi = self.slater.evaluate(r);
-        let j = self.jastrow.evaluate(r);
-        let lap_psi = self.slater.laplacian(r);
-        let lap_j = self.jastrow.laplacian(r);
-        let grad_psi = self.slater.derivative(r);
-        let grad_j = self.jastrow.derivative(r);
-        
-        lap_psi.into_iter()
-            .zip(lap_j.into_iter())
-            .zip(grad_psi.into_iter().zip(grad_j.into_iter()))
-            .map(|((lp, lj), (gp, gj))| {
-                j * lp + psi * lj + 2.0 * gp.dot(&gj)
-            })
-            .collect()
-    }
-}
-
-
-impl EnergyCalculator for STOSlaterDet {
-    fn local_energy(&self, r: &[Vector3<f64>]) -> f64 {
-        let psi = self.evaluate(r);
-        let laplacian = self.laplacian(r);
-        
-        // Kinetic energy: -½ Σᵢ ∇²ψ/ψ
-        let kinetic = -0.5 * laplacian.iter().sum::<f64>() / psi;
-        
-        // Potential energy: electron-nucleus attraction (Li nucleus Z=3)
-        // All electrons attracted to nucleus at origin
-        let potential: f64 = r.iter()
-            .map(|ri| -3.0 / ri.norm())
-            .sum();
-        
-        kinetic + potential
-    }
-}
-
-impl EnergyCalculator for Lithium {
-    fn local_energy(&self, r: &[Vector3<f64>]) -> f64 {
-        let psi = self.evaluate(r);
-        let laplacian = self.laplacian(r);
-        
-        // Kinetic energy
-        let kinetic = -0.5 * laplacian.iter().sum::<f64>() / psi;
-        
-        // Electron-nucleus potential (Li nucleus Z=3 at origin)
-        let v_en: f64 = r.iter()
-            .map(|ri| -3.0 / ri.norm())
-            .sum();
-        
-        // Electron-electron repulsion
-        let n = r.len();
-        let v_ee: f64 = (0..n)
-            .flat_map(|i| ((i + 1)..n).map(move |j| (i, j)))
-            .map(|(i, j)| 1.0 / (r[i] - r[j]).norm())
-            .sum();
-        
-        kinetic + v_en + v_ee
-    }
-}
-

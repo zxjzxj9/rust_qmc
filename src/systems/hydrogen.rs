@@ -1,51 +1,12 @@
-//! Simple QMC implementation for the H₂ molecule
+//! H₂ molecule wavefunctions for QMC calculations.
 //!
 //! Supports both Valence Bond (VB) and Molecular Orbital (MO) wavefunctions.
 
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
-use crate::jastrow::Jastrow1;
-use crate::mcmc::EnergyCalculator;
-use crate::wfn::{MultiWfn, SingleWfn};
-
-/// Slater 1s orbital centered at position `center` with exponent `alpha`.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Slater1s {
-    /// Orbital exponent
-    pub alpha: f64,
-    /// Center position of the orbital
-    pub center: Vector3<f64>,
-}
-
-impl SingleWfn for Slater1s {
-    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
-        let dr = r - self.center;
-        (-self.alpha * dr.norm()).exp()
-    }
-
-    fn derivative(&self, r: &Vector3<f64>) -> Vector3<f64> {
-        let dr = r - self.center;
-        let r_norm = dr.norm();
-        if r_norm == 0.0 {
-            return Vector3::zeros();
-        }
-        let scalar = -self.alpha / r_norm * (-self.alpha * r_norm).exp();
-        dr * scalar
-    }
-
-    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
-        let dr = r - self.center;
-        let r_norm = dr.norm();
-        if r_norm == 0.0 {
-            return f64::NEG_INFINITY;
-        }
-        let exp_part = (-self.alpha * r_norm).exp();
-        (self.alpha.powi(2) - 2.0 * self.alpha / r_norm) * exp_part
-    }
-}
-
-// Re-export Jastrow1 for backwards compatibility
-pub use crate::jastrow::Jastrow1;
+use crate::correlation::Jastrow1;
+use crate::sampling::EnergyCalculator;
+use crate::wavefunction::{MultiWfn, SingleWfn, Slater1s};
 
 /// H₂ molecule with Valence Bond (VB) wavefunction.
 ///

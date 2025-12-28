@@ -1,43 +1,18 @@
+//! Diffusion Monte Carlo (DMC) implementation.
+//!
+//! Reference paper: https://www.thphys.uni-heidelberg.de/~wetzel/qmc2006/KOSZ96.pdf
+
 use nalgebra::Vector3;
-use rand::{Rng, RngCore};
+use rand::Rng;
 use rand_distr::{Normal, Distribution};
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use super::traits::{Walker, BranchingResult};
 
-const MAX_CLONES: i32 = 3; //  number of clones to prevent explosion
-
-// reference paper, https://www.thphys.uni-heidelberg.de/~wetzel/qmc2006/KOSZ96.pdf
-// Define a trait for walker behavior
-pub trait Walker {
-    fn new(dt: f64, eref: f64) -> Self;
-    // Move the walker to a new position
-    fn move_walker(&mut self);
-
-    // Calculate local properties like energy
-    fn calculate_local_energy(&mut self);
-
-    fn local_energy(&self) -> f64;
-
-    // Update the walker's weight
-    fn update_weight(&mut self, e_ref: f64);
-
-    // Decide whether to branch (clone) or die
-    fn branching_decision(&mut self) -> BranchingResult;
-
-    // Check if the walker should be deleted
-    fn should_be_deleted(&self) -> bool;
-
-    // Mark the walker for deletion
-    fn mark_for_deletion(&mut self);
-}
-
-// Define an enum for branching decisions
-pub enum BranchingResult {
-    Clone { n: usize }, // n is the number of clones
-    Keep,               // The walker continues as is
-    Kill,               // The walker should be removed
-}
+const MAX_CLONES: i32 = 3; // Maximum number of clones to prevent explosion
 
 #[derive(Copy, Clone)]
-pub(crate) struct HarmonicWalker {
+pub struct HarmonicWalker {
     position: f64,
     dt: f64,  // Δτ
     sdt: f64, // √Δτ
@@ -47,17 +22,7 @@ pub(crate) struct HarmonicWalker {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) struct HydrogenAtomWalker {
-    position: Vector3<f64>,
-    dt: f64,  // Δτ
-    sdt: f64, // √Δτ
-    energy: f64,
-    weight: f64,
-    marked_for_deletion: bool,
-}
-
-#[derive(Copy, Clone)]
-pub(crate) struct LithiumAtomWalker {
+pub struct HydrogenAtomWalker {
     position: Vector3<f64>,
     dt: f64,  // Δτ
     sdt: f64, // √Δτ
@@ -67,7 +32,7 @@ pub(crate) struct LithiumAtomWalker {
 }
 
 #[derive(Clone)]
-pub(crate) struct HydrogenMoleculeWalker {
+pub struct HydrogenMoleculeWalker {
     nuclei: Vec<Vector3<f64>>,
     position: Vec<Vector3<f64>>,
     dt: f64,  // Δτ
@@ -76,7 +41,6 @@ pub(crate) struct HydrogenMoleculeWalker {
     weight: f64,
     marked_for_deletion: bool,
 }
-
 
 impl Walker for HydrogenAtomWalker {
     fn new(dt: f64, eref: f64) -> Self {
@@ -99,6 +63,7 @@ impl Walker for HydrogenAtomWalker {
         r.update_weight(eref);
         r
     }
+    
     fn move_walker(&mut self) {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, self.sdt).unwrap();
@@ -112,7 +77,7 @@ impl Walker for HydrogenAtomWalker {
     }
 
     fn local_energy(&self) -> f64 {
-        return self.energy;
+        self.energy
     }
 
     fn update_weight(&mut self, e_ref: f64) {
@@ -160,6 +125,7 @@ impl Walker for HarmonicWalker {
         r.update_weight(eref);
         r
     }
+    
     fn move_walker(&mut self) {
         let mut rng = rand::thread_rng();
         let dist = Normal::new(0.0, self.sdt).unwrap();
@@ -172,7 +138,7 @@ impl Walker for HarmonicWalker {
     }
 
     fn local_energy(&self) -> f64 {
-        return self.energy;
+        self.energy
     }
 
     fn update_weight(&mut self, e_ref: f64) {
@@ -202,23 +168,92 @@ impl Walker for HarmonicWalker {
     }
 }
 
-pub(crate) fn run_dmc_sampling<T: Walker + Clone>() {
+impl Walker for HydrogenMoleculeWalker {
+    fn new(dt: f64, eref: f64) -> Self {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, 1.0).unwrap();
+
+        let position = vec![
+            Vector3::<f64>::from_distribution(&dist, &mut rng),
+            Vector3::<f64>::from_distribution(&dist, &mut rng),
+        ];
+        let energy = 0.0;
+        let weight = 1.0;
+        let marked_for_deletion = false;
+        let mut r = Self {
+            nuclei: vec![Vector3::new(0.0, 0.0, 0.7), Vector3::new(0.0, 0.0, -0.7)],
+            position,
+            dt,
+            sdt: dt.sqrt(),
+            energy,
+            weight,
+            marked_for_deletion,
+        };
+        r.calculate_local_energy();
+        r.update_weight(eref);
+        r
+    }
+
+    fn move_walker(&mut self) {
+        let mut rng = rand::thread_rng();
+        let dist = Normal::new(0.0, self.sdt).unwrap();
+
+        for pos in self.position.iter_mut() {
+            *pos += Vector3::<f64>::from_distribution(&dist, &mut rng);
+        }
+    }
+
+    fn calculate_local_energy(&mut self) {
+        let r11 = (self.position[0] - self.nuclei[0]).norm();
+        let r12 = (self.position[0] - self.nuclei[1]).norm();
+        let r21 = (self.position[1] - self.nuclei[0]).norm();
+        let r22 = (self.position[1] - self.nuclei[1]).norm();
+        let r_nn = (self.nuclei[0] - self.nuclei[1]).norm();
+        self.energy = -1.0 / r11 - 1.0 / r12 - 1.0/r21 - 1.0/r22 + 1.0 / (self.position[0] - self.position[1]).norm() + 1.0/r_nn;
+    }
+
+    fn local_energy(&self) -> f64 {
+        self.energy
+    }
+
+    fn update_weight(&mut self, e_ref: f64) {
+        self.weight = ((-self.energy + e_ref) * self.dt).exp();
+    }
+
+    fn branching_decision(&mut self) -> BranchingResult {
+        let mut rng = rand::thread_rng();
+        let r: f64 = rng.gen::<f64>();
+        let cnt = ((self.weight + r).floor() as i32).max(0).min(MAX_CLONES);
+        if cnt == 0 {
+            self.marked_for_deletion = true;
+        }
+        match cnt {
+            0 => BranchingResult::Kill,
+            1 => BranchingResult::Keep,
+            _ => BranchingResult::Clone { n: cnt as usize },
+        }
+    }
+
+    fn should_be_deleted(&self) -> bool {
+        self.marked_for_deletion
+    }
+
+    fn mark_for_deletion(&mut self) {
+        self.marked_for_deletion = true;
+    }
+}
+
+pub fn run_dmc_sampling<T: Walker + Clone>() {
     let n_walkers = 10000;
     let n_target = 10000;
     let n_steps = 10000;
     let dt = 0.01;
     let mut eref = 0.0;
 
-    // let mut walkers: Vec<HarmonicWalker> = vec![];
-    // for _ in 0..n_walkers {
-    //     walkers.push(HarmonicWalker::new(dt, eref));
-    // }
-
     let mut walkers: Vec<T> = vec![];
     for _ in 0..n_walkers {
         walkers.push(T::new(dt, eref));
     }
-
 
     // Vectors to store mean energies and standard deviations
     let mut mean_energies = Vec::with_capacity(n_steps);
@@ -277,14 +312,8 @@ pub(crate) fn run_dmc_sampling<T: Walker + Clone>() {
     println!("Final number of walkers: {}", n_walkers);
 
     // Write final positions to a file (wavefunction)
-    use std::fs::File;
-    use std::io::{BufWriter, Write};
-
-    let file = File::create("positions.txt").unwrap();
-    let mut writer = BufWriter::new(file);
-    // for walker in walkers.iter() {
-    //     writeln!(writer, "{}", walker.position).unwrap();
-    // }
+    let _file = File::create("positions.txt").unwrap();
+    let _writer = BufWriter::new(_file);
 
     // Write energy trajectory to a file
     let file = File::create("energies.txt").unwrap();
@@ -316,79 +345,4 @@ pub(crate) fn run_dmc_sampling<T: Walker + Clone>() {
         "Overall mean energy: {}, overall std dev: {}",
         overall_mean, overall_std_dev
     );
-}
-
-impl Walker for HydrogenMoleculeWalker {
-    fn new(dt: f64, eref: f64) -> Self {
-        let mut rng = rand::thread_rng();
-        let dist = Normal::new(0.0, 1.0).unwrap();
-
-        let position = vec![
-            Vector3::<f64>::from_distribution(&dist, &mut rng),
-            Vector3::<f64>::from_distribution(&dist, &mut rng),
-        ];
-        let energy = 0.0;
-        let weight = 1.0;
-        let marked_for_deletion = false;
-        let mut r = Self {
-            nuclei: vec![Vector3::new(0.0, 0.0, 0.7), Vector3::new(0.0, 0.0, -0.7)],
-            position,
-            dt,
-            sdt: dt.sqrt(),
-            energy,
-            weight,
-            marked_for_deletion,
-        };
-        r.calculate_local_energy();
-        r.update_weight(eref);
-        r
-    }
-
-    fn move_walker(&mut self) {
-        let mut rng = rand::thread_rng();
-        let dist = Normal::new(0.0, self.sdt).unwrap();
-
-        for pos in self.position.iter_mut() {
-            *pos += Vector3::<f64>::from_distribution(&dist, &mut rng);
-        }
-    }
-
-    fn calculate_local_energy(&mut self) {
-        let r11 = (self.position[0] - self.nuclei[0]).norm();
-        let r12 = (self.position[0] - self.nuclei[1]).norm();
-        let r21 = (self.position[1] - self.nuclei[0]).norm();
-        let r22 = (self.position[1] - self.nuclei[1]).norm();
-        let R = (self.nuclei[0] - self.nuclei[1]).norm();
-        self.energy = -1.0 / r11 - 1.0 / r12 - 1.0/r21 - 1.0/r22 + 1.0 / (self.position[0] - self.position[1]).norm() + 1.0/R;
-    }
-
-    fn local_energy(&self) -> f64 {
-        self.energy
-    }
-
-    fn update_weight(&mut self, e_ref: f64) {
-        self.weight = ((-self.energy + e_ref) * self.dt).exp();
-    }
-
-    fn branching_decision(&mut self) -> BranchingResult {
-        let mut rng = rand::thread_rng();
-        let r: f64 = rng.gen::<f64>();
-        let cnt = ((self.weight + r).floor() as i32).max(0).min(MAX_CLONES);
-        if cnt == 0 {
-            self.marked_for_deletion = true;
-        }
-        match cnt {
-            0 => BranchingResult::Kill,
-            1 => BranchingResult::Keep,
-            _ => BranchingResult::Clone { n: cnt as usize },
-        }
-    }
-
-    fn should_be_deleted(&self) -> bool {
-        self.marked_for_deletion
-    }
-
-    fn mark_for_deletion(&mut self) {
-        self.marked_for_deletion = true;
-    }
 }

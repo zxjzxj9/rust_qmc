@@ -1,13 +1,31 @@
+//! Rust QMC - Quantum Monte Carlo simulations in Rust
+//!
+//! This crate provides Variational Monte Carlo (VMC) and Diffusion Monte Carlo (DMC)
+//! implementations for quantum chemistry calculations.
+
+pub mod wavefunction;
+pub mod correlation;
+pub mod systems;
+pub mod sampling;
+pub mod io;
+
+// Re-export commonly used types at crate root
+pub use wavefunction::{SingleWfn, MultiWfn, STO, Slater1s, STOSlaterDet, init_li_sto};
+pub use correlation::{Jastrow1, Jastrow2};
+pub use systems::{H2MoleculeVB, H2MoleculeMO, Lithium, LatticeVector, LithiumCrystalWalker};
+pub use sampling::{EnergyCalculator, MCMCParams, MCMCSimulation, MCMCResults, Walker, BranchingResult, VmcWalker};
+pub use io::{read_h2molecule_vb, read_h2molecule_mo};
+
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
     use rand_distr::{Distribution, Normal};
     
-    use crate::h2_mol::{H2MoleculeVB, Slater1s};
-    use crate::jastrow::{Jastrow1, Jastrow2};
-    use crate::sto::{init_li_sto, Lithium, STOSlaterDet};
-    use crate::wfn::{MultiWfn, SingleWfn};
+    use crate::systems::{H2MoleculeVB};
+    use crate::correlation::{Jastrow1, Jastrow2};
+    use crate::wavefunction::{init_li_sto, Slater1s, STOSlaterDet, MultiWfn, SingleWfn};
+    use crate::systems::Lithium;
 
     #[test]
     fn test_jastrow1_evaluate() {

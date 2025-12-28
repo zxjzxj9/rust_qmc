@@ -6,7 +6,7 @@
 use nalgebra::Vector3;
 use rand_distr::Normal;
 use serde::{Deserialize, Serialize};
-use crate::wfn::MultiWfn;
+use crate::wavefunction::MultiWfn;
 
 /// Two-electron Jastrow factor: J(r₁₂) = exp(-F / (2(1 + r₁₂/F)))
 ///

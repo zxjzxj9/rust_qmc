@@ -1,12 +1,13 @@
+//! Crystal lattice structures for QMC calculations.
+
 use std::fs::File;
 use std::io::BufWriter;
+use std::io::Write;
 use nalgebra::{Matrix3, Vector3};
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
-use crate::dmc::{Walker, BranchingResult};
-use crate::mcmc::EnergyCalculator;
+use crate::sampling::{Walker, BranchingResult, VmcWalker};
 use statrs::function::erf::erfc;
-
 
 const MAX_CLONES: i32 = 3;
 
@@ -134,7 +135,7 @@ impl Walker for LithiumCrystalWalker {
             marked_for_deletion: false,
         };
 
-        walker.calculate_local_energy();
+        <LithiumCrystalWalker as Walker>::calculate_local_energy(&mut walker);
         walker.update_weight(eref);
         walker
     }
@@ -213,19 +214,11 @@ impl Walker for LithiumCrystalWalker {
     }
 }
 
-
-pub trait VmcWalker: Sized {
-    fn new() -> Self;
-    fn move_walker(&mut self) -> (bool, f64);
-    fn calculate_local_energy(&mut self) -> f64;
-    fn get_positions(&self) -> &Vec<Vector3<f64>>;
-}
-
 impl VmcWalker for LithiumCrystalWalker {
     fn new() -> Self {
         let dt = 0.01; // Default step size for VMC
         let eref = 0.0;
-        Self::new(dt, eref)
+        <Self as Walker>::new(dt, eref)
     }
 
     fn move_walker(&mut self) -> (bool, f64) {
@@ -251,7 +244,7 @@ impl VmcWalker for LithiumCrystalWalker {
         );
 
         // Calculate new energy and wavefunction ratio
-        self.calculate_local_energy();
+        <Self as Walker>::calculate_local_energy(self);
 
         // In VMC we only need energy for acceptance;
         // for a real wavefunction trial, we'd use |Ψ_new|²/|Ψ_old|²
@@ -268,7 +261,7 @@ impl VmcWalker for LithiumCrystalWalker {
     }
 
     fn calculate_local_energy(&mut self) -> f64 {
-        self.calculate_local_energy();
+        <Self as Walker>::calculate_local_energy(self);
         self.energy
     }
 
@@ -405,7 +398,7 @@ mod tests {
     fn test_lithium_crystal_walker_creation() {
         let dt = 0.01;
         let eref = 0.0;
-        let walker = LithiumCrystalWalker::new(dt, eref);
+        let walker = <LithiumCrystalWalker as Walker>::new(dt, eref);
 
         // Check initialization
         assert_eq!(walker.ion_positions.len(), 2); // BCC has 2 atoms per unit cell
@@ -419,7 +412,7 @@ mod tests {
     fn test_ewald_summation() {
         let dt = 0.01;
         let eref = 0.0;
-        let walker = LithiumCrystalWalker::new(dt, eref);
+        let walker = <LithiumCrystalWalker as Walker>::new(dt, eref);
 
         // Ewald sum for a simple case should be finite and non-zero
         let ewald_energy = walker.calculate_ewald_sum();
@@ -434,13 +427,13 @@ mod tests {
     fn test_walker_movement() {
         let dt = 0.01;
         let eref = 0.0;
-        let mut walker = LithiumCrystalWalker::new(dt, eref);
+        let mut walker = <LithiumCrystalWalker as Walker>::new(dt, eref);
 
         // Save initial positions
         let initial_positions = walker.electron_positions.clone();
 
         // Move walker
-        walker.move_walker();
+        <LithiumCrystalWalker as Walker>::move_walker(&mut walker);
 
         // Positions should change
         let mut changed = false;
@@ -465,15 +458,15 @@ mod tests {
     fn test_local_energy_calculation() {
         let dt = 0.01;
         let eref = 0.0;
-        let mut walker = LithiumCrystalWalker::new(dt, eref);
+        let mut walker = <LithiumCrystalWalker as Walker>::new(dt, eref);
 
         // Energy should be calculated during creation
         let initial_energy = walker.energy;
         assert!(initial_energy.is_finite());
 
         // Move walker and recalculate energy
-        walker.move_walker();
-        walker.calculate_local_energy();
+        <LithiumCrystalWalker as Walker>::move_walker(&mut walker);
+        <LithiumCrystalWalker as Walker>::calculate_local_energy(&mut walker);
 
         // Energy should change
         assert_ne!(initial_energy, walker.energy);

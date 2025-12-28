@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::{BufReader, Result};
-use crate::h2_mol::{H2MoleculeVB, H2MoleculeMO};
+use crate::systems::{H2MoleculeVB, H2MoleculeMO};
 
 /// Load H₂ molecule (VB wavefunction) from YAML file.
 ///
