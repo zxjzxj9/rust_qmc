@@ -18,8 +18,9 @@ pub struct LatticeVector {
 }
 
 impl LatticeVector {
+    /// Create a BCC (body-centered cubic) lattice.
     pub fn new_bcc(a: f64) -> Self {
-        // BCC lattice vectors
+        // BCC lattice vectors (primitive cell)
         let lattice = Matrix3::new(
             -a/2.0, a/2.0, a/2.0,
             a/2.0, -a/2.0, a/2.0,
@@ -39,6 +40,64 @@ impl LatticeVector {
             lattice_vector: lattice,
             reciprocal_vector: reciprocal
         }
+    }
+
+    /// Create an FCC (face-centered cubic) lattice.
+    ///
+    /// FCC primitive vectors:
+    /// a1 = a/2 (0, 1, 1)
+    /// a2 = a/2 (1, 0, 1)  
+    /// a3 = a/2 (1, 1, 0)
+    pub fn new_fcc(a: f64) -> Self {
+        // FCC primitive lattice vectors
+        let lattice = Matrix3::new(
+            0.0,   a/2.0, a/2.0,
+            a/2.0, 0.0,   a/2.0,
+            a/2.0, a/2.0, 0.0
+        );
+
+        // Calculate reciprocal lattice vectors: b_i = 2π (a_j × a_k) / V
+        let volume = lattice.determinant();
+        let reciprocal = 2.0 * std::f64::consts::PI / volume *
+            Matrix3::new(
+                -1.0, 1.0, 1.0,
+                1.0, -1.0, 1.0,
+                1.0, 1.0, -1.0
+            );
+
+        Self {
+            lattice_vector: lattice,
+            reciprocal_vector: reciprocal
+        }
+    }
+
+    /// Create a simple cubic lattice.
+    pub fn new_cubic(a: f64) -> Self {
+        let lattice = Matrix3::new(
+            a,   0.0, 0.0,
+            0.0, a,   0.0,
+            0.0, 0.0, a
+        );
+
+        let reciprocal = Matrix3::new(
+            2.0 * std::f64::consts::PI / a, 0.0, 0.0,
+            0.0, 2.0 * std::f64::consts::PI / a, 0.0,
+            0.0, 0.0, 2.0 * std::f64::consts::PI / a
+        );
+
+        Self {
+            lattice_vector: lattice,
+            reciprocal_vector: reciprocal
+        }
+    }
+
+    /// Get the effective lattice constant.
+    pub fn lattice_constant(&self) -> f64 {
+        // For primitive cells, compute from volume: a = (4V)^(1/3) for FCC
+        // This returns the conventional cubic lattice constant
+        let vol = self.lattice_vector.determinant().abs();
+        // FCC primitive volume = a³/4, so a = (4V)^(1/3)
+        (4.0 * vol).powf(1.0 / 3.0)
     }
 
     pub fn minimum_image_distance(&self, r1: &Vector3<f64>, r2: &Vector3<f64>) -> Vector3<f64> {
