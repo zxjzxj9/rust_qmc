@@ -10,12 +10,12 @@ use rust_qmc::sampling::run_pimc_harmonic;
 fn main() {
     // Simulation parameters
     let n_paths = 100;          // Number of parallel walkers
-    let n_beads = 64;           // Trotter slices (M)
-    let beta = 20.0;            // Inverse temperature (low T → ground state)
+    let n_beads = 128;          // Trotter slices (M) - more = less Trotter error
+    let beta = 40.0;            // Inverse temperature (low T → ground state)
     let omega = 1.0;            // Oscillator frequency (ℏω = 1 in natural units)
-    let n_thermalize = 2000;    // Thermalization sweeps
-    let n_production = 5000;    // Production sweeps
-    let use_staging = true;     // Use staging moves for better sampling
+    let n_thermalize = 5000;    // Thermalization sweeps
+    let n_production = 10000;   // Production sweeps
+    let use_staging = false;    // Use Metropolis moves only for now
 
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Path Integral Monte Carlo - Harmonic Oscillator          ║");
