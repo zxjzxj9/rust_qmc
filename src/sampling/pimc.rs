@@ -494,6 +494,435 @@ pub fn run_pimc_harmonic(
     println!("\nEnergy trajectory written to pimc_energies.txt");
 }
 
+// =============================================================================
+// Generalized Potential Support
+// =============================================================================
+
+/// Trait for 1D potentials that can be used with PIMC
+pub trait Potential: Clone + Send + Sync {
+    /// Evaluate the potential V(x) at position x
+    fn evaluate(&self, x: f64) -> f64;
+    
+    /// Name of the potential for display
+    fn name(&self) -> &'static str;
+    
+    /// Suggested initialization width for beads
+    fn init_width(&self) -> f64;
+}
+
+/// Harmonic oscillator potential: V(x) = (1/2)mω²x²
+#[derive(Clone)]
+pub struct HarmonicPotential {
+    pub mass: f64,
+    pub omega: f64,
+}
+
+impl Potential for HarmonicPotential {
+    fn evaluate(&self, x: f64) -> f64 {
+        0.5 * self.mass * self.omega * self.omega * x * x
+    }
+    
+    fn name(&self) -> &'static str {
+        "Harmonic Oscillator"
+    }
+    
+    fn init_width(&self) -> f64 {
+        (1.0 / (self.mass * self.omega)).sqrt()
+    }
+}
+
+/// Sombrero (Mexican Hat) potential: V(x) = -μ²x²/2 + λx⁴/4
+/// 
+/// This is a double-well potential with minima at x = ±√(μ²/λ)
+/// The barrier height is V(0) - V(x_min) = μ⁴/(4λ)
+#[derive(Clone)]
+pub struct SombreroPotential {
+    /// μ² coefficient (controls well depth)
+    pub mu_squared: f64,
+    /// λ coefficient (controls quartic term)
+    pub lambda: f64,
+}
+
+impl SombreroPotential {
+    /// Create a sombrero potential with specified barrier height and well positions
+    /// 
+    /// # Arguments
+    /// * `well_position` - Location of the minima at x = ±x_min
+    /// * `barrier_height` - Height of the barrier at x=0 above the minima
+    pub fn from_geometry(well_position: f64, barrier_height: f64) -> Self {
+        // x_min = √(μ²/λ), so μ²/λ = x_min²
+        // barrier = μ⁴/(4λ), so μ⁴ = 4λ × barrier
+        // From x_min²: μ² = λ × x_min², so μ⁴ = λ² × x_min⁴
+        // Therefore: λ² × x_min⁴ = 4λ × barrier
+        // λ = 4 × barrier / x_min⁴
+        // μ² = λ × x_min² = 4 × barrier / x_min²
+        let lambda = 4.0 * barrier_height / well_position.powi(4);
+        let mu_squared = lambda * well_position.powi(2);
+        Self { mu_squared, lambda }
+    }
+    
+    /// Location of the potential minima
+    pub fn well_position(&self) -> f64 {
+        (self.mu_squared / self.lambda).sqrt()
+    }
+    
+    /// Height of the barrier at x=0
+    pub fn barrier_height(&self) -> f64 {
+        self.mu_squared * self.mu_squared / (4.0 * self.lambda)
+    }
+}
+
+impl Potential for SombreroPotential {
+    fn evaluate(&self, x: f64) -> f64 {
+        -0.5 * self.mu_squared * x * x + 0.25 * self.lambda * x.powi(4)
+    }
+    
+    fn name(&self) -> &'static str {
+        "Sombrero (Mexican Hat)"
+    }
+    
+    fn init_width(&self) -> f64 {
+        self.well_position()
+    }
+}
+
+/// Double-well potential: V(x) = a(x² - b²)²
+/// 
+/// Minima at x = ±b, barrier height = ab⁴
+#[derive(Clone)]
+pub struct DoubleWellPotential {
+    pub a: f64,
+    pub b: f64,
+}
+
+impl Potential for DoubleWellPotential {
+    fn evaluate(&self, x: f64) -> f64 {
+        let diff = x * x - self.b * self.b;
+        self.a * diff * diff
+    }
+    
+    fn name(&self) -> &'static str {
+        "Double Well"
+    }
+    
+    fn init_width(&self) -> f64 {
+        self.b
+    }
+}
+
+/// Quantum path with a general potential
+#[derive(Clone)]
+pub struct GeneralPath<P: Potential> {
+    pub beads: Vec<f64>,
+    pub n_beads: usize,
+    pub dtau: f64,
+    pub beta: f64,
+    pub mass: f64,
+    pub potential: P,
+}
+
+impl<P: Potential> GeneralPath<P> {
+    pub fn new(n_beads: usize, beta: f64, mass: f64, potential: P) -> Self {
+        let dtau = beta / n_beads as f64;
+        let mut rng = rand::thread_rng();
+        let sigma = potential.init_width();
+        let dist = Normal::new(0.0, sigma).unwrap();
+        
+        let beads: Vec<f64> = (0..n_beads)
+            .map(|_| dist.sample(&mut rng))
+            .collect();
+        
+        Self { beads, n_beads, dtau, beta, mass, potential }
+    }
+    
+    #[inline]
+    fn kinetic_action(&self, i: usize) -> f64 {
+        let j = (i + 1) % self.n_beads;
+        let dx = self.beads[j] - self.beads[i];
+        0.5 * self.mass / self.dtau * dx * dx
+    }
+    
+    #[inline]
+    fn potential_action(&self, i: usize) -> f64 {
+        self.dtau * self.potential.evaluate(self.beads[i])
+    }
+    
+    fn local_action_change(&self, i: usize, x_old: f64, x_new: f64) -> f64 {
+        let prev = (i + self.n_beads - 1) % self.n_beads;
+        let next = (i + 1) % self.n_beads;
+        let x_prev = self.beads[prev];
+        let x_next = self.beads[next];
+        
+        let spring_const = self.mass / self.dtau;
+        
+        let s_old = 0.5 * spring_const * ((x_old - x_prev).powi(2) + (x_next - x_old).powi(2))
+                  + self.dtau * self.potential.evaluate(x_old);
+        
+        let s_new = 0.5 * spring_const * ((x_new - x_prev).powi(2) + (x_next - x_new).powi(2))
+                  + self.dtau * self.potential.evaluate(x_new);
+        
+        s_new - s_old
+    }
+    
+    pub fn metropolis_move(&mut self, delta: f64) -> bool {
+        let mut rng = rand::thread_rng();
+        let uniform = Uniform::new(-1.0, 1.0);
+        let i = rng.gen_range(0..self.n_beads);
+        let x_old = self.beads[i];
+        let x_new = x_old + delta * uniform.sample(&mut rng);
+        
+        let delta_s = self.local_action_change(i, x_old, x_new);
+        
+        let accept = if delta_s < 0.0 {
+            true
+        } else {
+            rng.gen::<f64>() < (-delta_s).exp()
+        };
+        
+        if accept {
+            self.beads[i] = x_new;
+        }
+        accept
+    }
+    
+    /// Energy estimator using potential average (virial-like for general potentials)
+    pub fn energy_estimator(&self) -> f64 {
+        let n = self.n_beads as f64;
+        
+        // Kinetic from primitive estimator
+        let mut spring_sum = 0.0;
+        for i in 0..self.n_beads {
+            let j = (i + 1) % self.n_beads;
+            let dx = self.beads[j] - self.beads[i];
+            spring_sum += dx * dx;
+        }
+        let mean_dx2 = spring_sum / n;
+        let kinetic = n / (2.0 * self.beta) 
+                    - self.mass * n * n * mean_dx2 / (2.0 * self.beta * self.beta);
+        
+        // Potential average
+        let mut pot_sum = 0.0;
+        for i in 0..self.n_beads {
+            pot_sum += self.potential.evaluate(self.beads[i]);
+        }
+        let potential = pot_sum / n;
+        
+        kinetic + potential
+    }
+    
+    pub fn average_position(&self) -> f64 {
+        self.beads.iter().sum::<f64>() / self.n_beads as f64
+    }
+    
+    pub fn average_position_squared(&self) -> f64 {
+        self.beads.iter().map(|x| x * x).sum::<f64>() / self.n_beads as f64
+    }
+    
+    /// Get position histogram for wavefunction visualization
+    pub fn position_histogram(&self, bins: &mut [f64], x_min: f64, x_max: f64) {
+        let n_bins = bins.len();
+        let bin_width = (x_max - x_min) / n_bins as f64;
+        
+        for &x in &self.beads {
+            if x >= x_min && x < x_max {
+                let bin = ((x - x_min) / bin_width) as usize;
+                if bin < n_bins {
+                    bins[bin] += 1.0;
+                }
+            }
+        }
+    }
+}
+
+/// General PIMC simulation with pluggable potential
+pub struct GeneralPIMC<P: Potential> {
+    pub paths: Vec<GeneralPath<P>>,
+    pub n_paths: usize,
+    pub delta: f64,
+    pub acceptance_count: usize,
+    pub total_moves: usize,
+}
+
+impl<P: Potential> GeneralPIMC<P> {
+    pub fn new(n_paths: usize, n_beads: usize, beta: f64, mass: f64, potential: P) -> Self {
+        let paths: Vec<GeneralPath<P>> = (0..n_paths)
+            .map(|_| GeneralPath::new(n_beads, beta, mass, potential.clone()))
+            .collect();
+        
+        let delta = potential.init_width() * 0.5;
+        
+        Self {
+            paths,
+            n_paths,
+            delta,
+            acceptance_count: 0,
+            total_moves: 0,
+        }
+    }
+    
+    pub fn sweep(&mut self) {
+        for path in self.paths.iter_mut() {
+            for _ in 0..path.n_beads {
+                if path.metropolis_move(self.delta) {
+                    self.acceptance_count += 1;
+                }
+                self.total_moves += 1;
+            }
+        }
+    }
+    
+    pub fn adapt_delta(&mut self, target_rate: f64) {
+        if self.total_moves < 100 {
+            return;
+        }
+        let current_rate = self.acceptance_count as f64 / self.total_moves as f64;
+        if current_rate < target_rate - 0.05 {
+            self.delta *= 0.95;
+        } else if current_rate > target_rate + 0.05 {
+            self.delta *= 1.05;
+        }
+        self.acceptance_count = 0;
+        self.total_moves = 0;
+    }
+    
+    pub fn acceptance_rate(&self) -> f64 {
+        if self.total_moves == 0 { 0.0 } 
+        else { self.acceptance_count as f64 / self.total_moves as f64 }
+    }
+    
+    pub fn average_energy(&self) -> f64 {
+        self.paths.iter().map(|p| p.energy_estimator()).sum::<f64>() / self.n_paths as f64
+    }
+    
+    pub fn average_x(&self) -> f64 {
+        self.paths.iter().map(|p| p.average_position()).sum::<f64>() / self.n_paths as f64
+    }
+    
+    pub fn average_x_squared(&self) -> f64 {
+        self.paths.iter().map(|p| p.average_position_squared()).sum::<f64>() / self.n_paths as f64
+    }
+    
+    /// Build position histogram |ψ(x)|² from all paths
+    pub fn build_histogram(&self, n_bins: usize, x_min: f64, x_max: f64) -> (Vec<f64>, Vec<f64>) {
+        let mut counts = vec![0.0; n_bins];
+        let bin_width = (x_max - x_min) / n_bins as f64;
+        
+        for path in &self.paths {
+            path.position_histogram(&mut counts, x_min, x_max);
+        }
+        
+        // Normalize and create x values
+        let total: f64 = counts.iter().sum();
+        if total > 0.0 {
+            for c in &mut counts {
+                *c /= total * bin_width; // Normalize to probability density
+            }
+        }
+        
+        let x_values: Vec<f64> = (0..n_bins)
+            .map(|i| x_min + (i as f64 + 0.5) * bin_width)
+            .collect();
+        
+        (x_values, counts)
+    }
+}
+
+/// Run PIMC simulation for sombrero potential
+pub fn run_pimc_sombrero(
+    n_paths: usize,
+    n_beads: usize,
+    beta: f64,
+    well_position: f64,
+    barrier_height: f64,
+    n_thermalize: usize,
+    n_production: usize,
+) {
+    let potential = SombreroPotential::from_geometry(well_position, barrier_height);
+    
+    println!("=== PIMC Sombrero (Mexican Hat) Potential ===");
+    println!("Number of paths: {}", n_paths);
+    println!("Number of beads (M): {}", n_beads);
+    println!("Inverse temperature β: {:.4}", beta);
+    println!("Well positions: ±{:.4}", potential.well_position());
+    println!("Barrier height: {:.4}", potential.barrier_height());
+    println!("μ² = {:.4}, λ = {:.4}", potential.mu_squared, potential.lambda);
+    println!();
+
+    let mass = 1.0;
+    let mut sim = GeneralPIMC::new(n_paths, n_beads, beta, mass, potential);
+
+    // Thermalization
+    println!("Thermalizing ({} sweeps)...", n_thermalize);
+    for step in 0..n_thermalize {
+        sim.sweep();
+        if step % 100 == 0 && step > 0 {
+            sim.adapt_delta(0.5);
+        }
+        if step % (n_thermalize / 5).max(1) == 0 {
+            println!(
+                "  Step {:6}: E = {:10.6}, <x> = {:10.6}, acceptance = {:.2}%",
+                step, sim.average_energy(), sim.average_x(), 100.0 * sim.acceptance_rate()
+            );
+        }
+    }
+    println!();
+
+    // Production
+    println!("Production ({} sweeps)...", n_production);
+    let mut energies = Vec::with_capacity(n_production);
+    let mut positions = Vec::with_capacity(n_production);
+
+    for step in 0..n_production {
+        sim.sweep();
+        let e = sim.average_energy();
+        let x = sim.average_x();
+        energies.push(e);
+        positions.push(x);
+        
+        if step % (n_production / 10).max(1) == 0 {
+            println!(
+                "  Step {:6}: E = {:10.6}, <x> = {:10.6}, <x²> = {:10.6}",
+                step, e, x, sim.average_x_squared()
+            );
+        }
+    }
+
+    // Statistics
+    let n = energies.len() as f64;
+    let mean_e = energies.iter().sum::<f64>() / n;
+    let var_e = energies.iter().map(|e| (e - mean_e).powi(2)).sum::<f64>() / n;
+    let stderr_e = var_e.sqrt() / n.sqrt();
+
+    let mean_x = positions.iter().sum::<f64>() / n;
+    let mean_x2 = sim.average_x_squared();
+
+    println!();
+    println!("=== Results ===");
+    println!("Ground state energy: E = {:.6} ± {:.6}", mean_e, stderr_e);
+    println!("Average position <x>: {:.6}", mean_x);
+    println!("Position variance <x²>: {:.6}", mean_x2);
+    println!("Acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
+
+    // Build and output wavefunction histogram
+    let (x_vals, psi_sq) = sim.build_histogram(100, -3.0 * well_position, 3.0 * well_position);
+    
+    let file = File::create("sombrero_wavefunction.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    writeln!(writer, "# x |psi(x)|^2").unwrap();
+    for (x, p) in x_vals.iter().zip(psi_sq.iter()) {
+        writeln!(writer, "{:.6} {:.6}", x, p).unwrap();
+    }
+    println!("\nWavefunction histogram written to sombrero_wavefunction.txt");
+
+    // Write energies
+    let file = File::create("sombrero_energies.txt").unwrap();
+    let mut writer = BufWriter::new(file);
+    for (i, e) in energies.iter().enumerate() {
+        writeln!(writer, "{} {}", i, e).unwrap();
+    }
+    println!("Energy trajectory written to sombrero_energies.txt");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
