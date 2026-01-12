@@ -12,6 +12,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_yaml = "0.9.34+deprecated"
 clap = { version = "4.5.19", features = ["derive"] }
 statrs = "0.18.0"
+num-complex = "0.4"
 
 # add o3 optimization flag
 [profile.release]

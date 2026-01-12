@@ -369,6 +369,7 @@ dependencies = [
  "approx",
  "clap",
  "nalgebra",
+ "num-complex",
  "rand",
  "rand_distr",
  "serde",
