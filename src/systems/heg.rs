@@ -573,8 +573,32 @@ impl EnergyCalculator for HomogeneousElectronGas {
         // Wrap positions for periodic boundaries
         let wrapped: Vec<_> = r.iter().map(|&pos| self.wrap_position(pos)).collect();
 
-        // Kinetic energy (full Slater-Jastrow expression)
-        let kinetic = self.kinetic_energy(&wrapped);
+        // Compute wavefunction value
+        let psi = self.evaluate(&wrapped);
+        
+        if psi.abs() < 1e-15 {
+            return 0.0; // Avoid division by zero at nodes
+        }
+
+        // Kinetic energy using numerical Laplacian: T = -½ Σᵢ ∇²Ψ/Ψ
+        let h = 1e-4; // Step size for numerical differentiation
+        let mut kinetic = 0.0;
+        
+        for i in 0..wrapped.len() {
+            for axis in 0..3 {
+                let mut r_fwd = wrapped.clone();
+                let mut r_bwd = wrapped.clone();
+                r_fwd[i][axis] += h;
+                r_bwd[i][axis] -= h;
+                
+                let psi_fwd = self.evaluate(&r_fwd);
+                let psi_bwd = self.evaluate(&r_bwd);
+                
+                // ∇²Ψ ≈ (Ψ(r+h) - 2Ψ(r) + Ψ(r-h)) / h²
+                kinetic += (psi_fwd - 2.0 * psi + psi_bwd) / (h * h);
+            }
+        }
+        kinetic = -0.5 * kinetic / psi;
 
         // Potential energy from Ewald sum
         let potential = self.ewald_potential(&wrapped);
