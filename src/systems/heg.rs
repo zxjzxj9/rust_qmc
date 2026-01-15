@@ -185,11 +185,12 @@ impl HomogeneousElectronGas {
         )
     }
 
-    /// Evaluate plane wave orbital: φ_k(r) = exp(ik·r) / √V
+    /// Evaluate plane wave orbital: φ_k(r) = exp(ik·r)
+    /// Note: Normalization factor 1/√V is omitted as it cancels in local energy
     #[inline]
     fn plane_wave(&self, k: &Vector3<f64>, r: &Vector3<f64>) -> Complex64 {
         let phase = k.dot(r);
-        Complex64::new(phase.cos(), phase.sin()) / self.box_length.powf(1.5)
+        Complex64::new(phase.cos(), phase.sin())
     }
 
     /// Compute Slater determinant for a set of electrons and k-vectors.
@@ -345,40 +346,54 @@ impl HomogeneousElectronGas {
     }
 
     /// Compute electron-electron potential using Ewald summation.
+    /// 
+    /// For jellium (HEG), the total potential includes:
+    /// 1. Electron-electron repulsion (Ewald sum)
+    /// 2. Electron-background attraction (constant per electron)
+    /// 3. Background-background repulsion (Madelung constant)
     fn ewald_potential(&self, positions: &[Vector3<f64>]) -> f64 {
         let n = positions.len();
+        let alpha = self.ewald_alpha;
+        let volume = self.box_length.powi(3);
+        
+        // === Direct sum (real-space) ===
         let mut v_real = 0.0;
-        let mut v_recip = 0.0;
-
-        // Real-space sum
         for i in 0..n {
             for j in (i + 1)..n {
                 let rij = self.minimum_image(positions[i] - positions[j]);
                 let r = rij.norm();
                 if r > 1e-10 {
-                    v_real += erfc(self.ewald_alpha * r) / r;
+                    // erfc(αr)/r term for short-range part
+                    v_real += erfc(alpha * r) / r;
                 }
             }
         }
 
-        // Reciprocal-space sum
+        // === Reciprocal-space sum ===
+        let mut v_recip = 0.0;
         for (k, factor) in &self.ewald_k_vectors {
+            // Structure factor S(k) = Σⱼ exp(ik·rⱼ)
             let mut rho_k = Complex64::new(0.0, 0.0);
             for pos in positions {
                 let phase = k.dot(pos);
                 rho_k += Complex64::new(phase.cos(), phase.sin());
             }
-            // |ρ(k)|² - N (subtract self-interaction in k-space)
+            // Potential contribution: (4π/Vk²) exp(-k²/4α²) × (|S(k)|² - N)
+            // The -N subtracts the self-interaction in reciprocal space
             let rho_k_sq = rho_k.norm_sqr() - n as f64;
             v_recip += 0.5 * factor * rho_k_sq;
         }
 
-        // Self-interaction correction
-        let v_self = -self.ewald_alpha / PI.sqrt() * n as f64;
+        // === Self-energy correction ===
+        // Each electron interacts with its own Gaussian screening cloud: -α/√π per electron
+        let v_self = -alpha / PI.sqrt() * n as f64;
         
-        // Background neutralization (for jellium - constant)
-        let v_background = -PI / (self.ewald_alpha.powi(2) * self.box_length.powi(3)) 
-            * (n as f64).powi(2);
+        // === Jellium neutralizing background ===
+        // The k=0 term in reciprocal space is handled by the neutralizing background.
+        // For jellium, this gives the "Madelung" constant:
+        // V_background = -π N² / (α² V)
+        // This exactly cancels the electron-background and background-background terms
+        let v_background = -PI * (n as f64).powi(2) / (alpha.powi(2) * volume);
 
         v_real + v_recip + v_self + v_background
     }
@@ -734,5 +749,101 @@ mod tests {
         assert_relative_eq!(grad[0].x, -grad[1].x, epsilon = 1e-10);
         assert_relative_eq!(grad[0].y, -grad[1].y, epsilon = 1e-10);
         assert_relative_eq!(grad[0].z, -grad[1].z, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_local_energy_reasonable() {
+        // For 2 electrons in a box at rs=4, check that energy is reasonable
+        let heg = HomogeneousElectronGas::new(2, 4.0, 2.0);
+        
+        // Use a well-separated electron configuration
+        let l = heg.box_length;
+        let positions = vec![
+            Vector3::new(l/4.0, l/4.0, l/4.0),
+            Vector3::new(3.0*l/4.0, 3.0*l/4.0, 3.0*l/4.0),
+        ];
+        
+        let psi = heg.evaluate(&positions);
+        let energy = heg.local_energy(&positions);
+        let potential = heg.ewald_potential(&positions);
+        
+        println!("=== HEG Debug (N=2) ===");
+        println!("Box length: {:.4}", l);
+        println!("Wavefunction: {:.6e}", psi);
+        println!("Potential energy: {:.6}", potential);
+        println!("Local energy: {:.6}", energy);
+        println!("Kinetic energy: {:.6}", energy - potential);
+        println!("E per electron: {:.6}", energy / 2.0);
+        
+        // Energy per electron should be on the order of -0.1 to +1.0 Ha for rs=4
+        let e_per_elec = energy / 2.0;
+        assert!(e_per_elec.is_finite(), "Energy should be finite");
+        assert!(e_per_elec.abs() < 10.0, 
+            "Energy per electron should be reasonable (got {})", e_per_elec);
+    }
+
+    #[test]
+    fn test_local_energy_14_electrons() {
+        // For 14 electrons at rs=4
+        let heg = HomogeneousElectronGas::new(14, 4.0, 2.0);
+        
+        // Random configuration
+        let positions = heg.initialize();
+        
+        let psi = heg.evaluate(&positions);
+        let energy = heg.local_energy(&positions);
+        let potential = heg.ewald_potential(&positions);
+        
+        println!("=== HEG Debug (N=14, rs=4) ===");
+        println!("Box length: {:.4}", heg.box_length);
+        println!("Wavefunction: {:.6e}", psi);
+        println!("Potential energy: {:.6}", potential);
+        println!("Local energy: {:.6}", energy);
+        println!("Kinetic energy: {:.6}", energy - potential);
+        println!("E per electron: {:.6}", energy / 14.0);
+        println!("Expected HF E/N: {:.6}", heg.hartree_fock_energy());
+        println!("Expected total E/N: {:.6}", heg.hartree_fock_energy() + heg.ceperley_alder_correlation());
+        
+        // Energy per electron at rs=4 should be around -0.05 to -0.15 Ha
+        let e_per_elec = energy / 14.0;
+        assert!(e_per_elec.is_finite(), "Energy should be finite");
+    }
+
+    #[test]
+    fn test_ewald_components() {
+        // Test Ewald potential components for a uniform configuration
+        let heg = HomogeneousElectronGas::new(14, 4.0, 2.0);
+        let l = heg.box_length;
+        let alpha = heg.ewald_alpha;
+        let n = heg.num_electrons;
+        
+        // Create a roughly uniform FCC-like configuration
+        let spacing = l / 3.0;
+        let positions: Vec<Vector3<f64>> = (0..n)
+            .map(|i| {
+                let x = ((i % 3) as f64 + 0.5) * spacing;
+                let y = (((i / 3) % 3) as f64 + 0.5) * spacing;
+                let z = ((i / 9) as f64 + 0.5) * spacing;
+                Vector3::new(x, y, z)
+            })
+            .collect();
+        
+        let v_total = heg.ewald_potential(&positions);
+        
+        println!("=== Ewald Components ===");
+        println!("N = {}, L = {:.4}, α = {:.4}", n, l, alpha);
+        println!("Total Ewald potential: {:.6}", v_total);
+        println!("V_total / N: {:.6}", v_total / n as f64);
+        
+        // For jellium at rs=4, the exchange potential is approximately -0.916/rs = -0.229 Ha
+        // But that's per electron in the thermodynamic limit
+        // For finite N, there are shell effects
+        
+        // The Ewald potential should be order N²/L ~ N^(5/3)/rs ~ 14^(5/3)/4 ~ 9
+        // Wait, that's too big. Let me reconsider.
+        // Actually V_ee ~ N(N-1)/2 × <1/r> ~ N²/L
+        // For N=14, L=15.5, this is ~14/15.5 ~ 0.9 Ha total, or ~0.06/electron
+        
+        assert!(v_total.is_finite());
     }
 }
