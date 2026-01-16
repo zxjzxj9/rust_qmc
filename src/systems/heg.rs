@@ -347,55 +347,70 @@ impl HomogeneousElectronGas {
 
     /// Compute electron-electron potential using Ewald summation.
     /// 
-    /// For jellium (HEG), the total potential includes:
-    /// 1. Electron-electron repulsion (Ewald sum)
-    /// 2. Electron-background attraction (constant per electron)
+    /// For jellium (HEG), the potential energy is the sum of:
+    /// 1. Electron-electron Coulomb repulsion (Ewald method)
+    /// 2. Electron-background attraction (cancels the k=0 divergence)
     /// 3. Background-background repulsion (Madelung constant)
+    /// 
+    /// The total for a neutral system gives a well-defined finite result.
+    /// 
+    /// Reference: Fraser et al., PRB 53, 1814 (1996)
     fn ewald_potential(&self, positions: &[Vector3<f64>]) -> f64 {
         let n = positions.len();
         let alpha = self.ewald_alpha;
-        let volume = self.box_length.powi(3);
+        let l = self.box_length;
+        let volume = l.powi(3);
         
-        // === Direct sum (real-space) ===
+        // === Part 1: Real-space sum ===
+        // Sum over pairs with minimum image convention
+        // V_real = Σᵢ<ⱼ erfc(α|rᵢⱼ|) / |rᵢⱼ|
         let mut v_real = 0.0;
         for i in 0..n {
             for j in (i + 1)..n {
                 let rij = self.minimum_image(positions[i] - positions[j]);
                 let r = rij.norm();
                 if r > 1e-10 {
-                    // erfc(αr)/r term for short-range part
                     v_real += erfc(alpha * r) / r;
                 }
             }
         }
 
-        // === Reciprocal-space sum ===
+        // === Part 2: Reciprocal-space sum ===
+        // V_recip = (1/2) Σₖ≠₀ (4π/Vk²) exp(-k²/4α²) × [|S(k)|² - N]
+        // where S(k) = Σⱼ exp(ik·rⱼ) is the structure factor
+        // The -N subtracts the self-term
         let mut v_recip = 0.0;
         for (k, factor) in &self.ewald_k_vectors {
-            // Structure factor S(k) = Σⱼ exp(ik·rⱼ)
             let mut rho_k = Complex64::new(0.0, 0.0);
             for pos in positions {
                 let phase = k.dot(pos);
                 rho_k += Complex64::new(phase.cos(), phase.sin());
             }
-            // Potential contribution: (4π/Vk²) exp(-k²/4α²) × (|S(k)|² - N)
-            // The -N subtracts the self-interaction in reciprocal space
             let rho_k_sq = rho_k.norm_sqr() - n as f64;
             v_recip += 0.5 * factor * rho_k_sq;
         }
 
-        // === Self-energy correction ===
-        // Each electron interacts with its own Gaussian screening cloud: -α/√π per electron
-        let v_self = -alpha / PI.sqrt() * n as f64;
+        // === Part 3: Self-energy correction ===
+        // Each electron interacts with its own Gaussian screening cloud
+        // V_self = -α N / √π
+        let v_self = -alpha * n as f64 / PI.sqrt();
         
-        // === Jellium neutralizing background ===
-        // The k=0 term in reciprocal space is handled by the neutralizing background.
-        // For jellium, this gives the "Madelung" constant:
-        // V_background = -π N² / (α² V)
-        // This exactly cancels the electron-background and background-background terms
-        let v_background = -PI * (n as f64).powi(2) / (alpha.powi(2) * volume);
+        // === Part 4: Neutralizing background (Madelung constant) ===
+        // For jellium, the k=0 term (which would diverge) is cancelled by
+        // electron-background and background-background interactions.
+        // The net result is the "Madelung energy":
+        // V_Madelung = -π N² / (α² V)
+        // 
+        // This comes from integrating the Fourier transform of the Coulomb
+        // potential near k=0 with the uniform background.
+        let v_madelung = -PI * (n as f64).powi(2) / (alpha.powi(2) * volume);
 
-        v_real + v_recip + v_self + v_background
+        // === Total potential energy ===
+        // Note: This is the *total* Coulomb energy, which includes the
+        // exchange-correlation effects implicitly through the electron positions.
+        // The "Hartree" energy of the uniform background is already cancelled
+        // by v_madelung.
+        v_real + v_recip + v_self + v_madelung
     }
 
     /// Compute kinetic energy from plane-wave Slater determinant.
