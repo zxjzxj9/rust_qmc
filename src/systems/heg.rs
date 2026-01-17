@@ -413,6 +413,43 @@ impl HomogeneousElectronGas {
         v_real + v_recip + v_self + v_madelung
     }
 
+    /// Debug version of Ewald that returns individual components
+    #[allow(dead_code)]
+    pub fn ewald_potential_debug(&self, positions: &[Vector3<f64>]) -> (f64, f64, f64, f64, f64) {
+        let n = positions.len();
+        let alpha = self.ewald_alpha;
+        let l = self.box_length;
+        let volume = l.powi(3);
+        
+        let mut v_real = 0.0;
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let rij = self.minimum_image(positions[i] - positions[j]);
+                let r = rij.norm();
+                if r > 1e-10 {
+                    v_real += erfc(alpha * r) / r;
+                }
+            }
+        }
+
+        let mut v_recip = 0.0;
+        for (k, factor) in &self.ewald_k_vectors {
+            let mut rho_k = Complex64::new(0.0, 0.0);
+            for pos in positions {
+                let phase = k.dot(pos);
+                rho_k += Complex64::new(phase.cos(), phase.sin());
+            }
+            let rho_k_sq = rho_k.norm_sqr() - n as f64;
+            v_recip += 0.5 * factor * rho_k_sq;
+        }
+
+        let v_self = -alpha * n as f64 / PI.sqrt();
+        let v_madelung = -PI * (n as f64).powi(2) / (alpha.powi(2) * volume);
+        let v_total = v_real + v_recip + v_self + v_madelung;
+        
+        (v_real, v_recip, v_self, v_madelung, v_total)
+    }
+
     /// Compute kinetic energy from plane-wave Slater determinant.
     /// 
     /// For plane waves: ∇²φₖ = -k² φₖ
