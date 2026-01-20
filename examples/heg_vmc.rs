@@ -12,6 +12,7 @@
 //!   -j, --jastrow <F>       Jastrow parameter F [default: rs/2]
 //!   -s, --steps <N>         Number of VMC steps [default: 100000]
 //!   -w, --walkers <N>       Number of walkers [default: 10]
+//!   -t, --twists <N>        Monkhorst-Pack grid size for TABC (N×N×N) [default: 1]
 
 use clap::Parser;
 use rust_qmc::{HomogeneousElectronGas, MCMCParams, MCMCSimulation};
@@ -39,6 +40,10 @@ struct Args {
     /// Number of walkers
     #[arg(short = 'w', long, default_value_t = 10)]
     walkers: usize,
+
+    /// Monkhorst-Pack grid size for twist-averaging (N×N×N twists)
+    #[arg(short = 't', long, default_value_t = 1)]
+    twists: usize,
 }
 
 /// Hartree to eV conversion factor
@@ -77,9 +82,6 @@ fn main() {
     // Jastrow parameter defaults to rs/2
     let jastrow_f = args.jastrow.unwrap_or(args.rs / 2.0);
 
-    // Create the HEG wavefunction
-    let heg = HomogeneousElectronGas::new(args.electrons, args.rs, jastrow_f);
-
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
@@ -89,21 +91,30 @@ fn main() {
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
+    // Generate Monkhorst-Pack twist grid
+    let twist_grid = HomogeneousElectronGas::monkhorst_pack_grid(args.twists);
+    let num_twists = twist_grid.len();
+
+    // Create first HEG for display purposes
+    let heg_display = HomogeneousElectronGas::new(args.electrons, args.rs, jastrow_f);
+
     println!("Simulation Parameters:");
     println!("══════════════════════");
-    println!("  Electrons (N):       {}", heg.num_electrons);
-    println!("  Spin up / down:      {} / {}", heg.num_up, heg.num_down);
+    println!("  Electrons (N):       {}", args.electrons);
+    println!("  Spin up / down:      {} / {}", heg_display.num_up, heg_display.num_down);
     println!("  Wigner-Seitz rs:     {:.2} Bohr", args.rs);
-    println!("  Box length L:        {:.4} Bohr", heg.box_length);
+    println!("  Box length L:        {:.4} Bohr", heg_display.box_length);
     println!("  Density n:           {:.6} electrons/Bohr³", 
-        heg.num_electrons as f64 / heg.box_length.powi(3));
+        args.electrons as f64 / heg_display.box_length.powi(3));
     println!("  Jastrow F:           {:.2}", jastrow_f);
     println!("  VMC walkers:         {}", args.walkers);
     println!("  VMC steps:           {}", args.steps);
+    println!("  Twist grid:          {}×{}×{} = {} twists", 
+        args.twists, args.twists, args.twists, num_twists);
     println!();
 
     // Reference values
-    let e_hf = heg.hartree_fock_energy();
+    let e_hf = heg_display.hartree_fock_energy();
     let e_c_ref = ceperley_alder_correlation(args.rs);
     
     println!("Reference Values:");
@@ -116,23 +127,46 @@ fn main() {
     // MCMC parameters
     let params = MCMCParams {
         n_walkers: args.walkers,
-        n_steps: args.steps,
-        initial_step_size: 0.5 * args.rs,  // Scale with density
+        n_steps: args.steps / num_twists.max(1),  // Split steps among twists
+        initial_step_size: 0.5 * args.rs,
         max_step_size: 2.0 * args.rs,
         min_step_size: 0.1,
         target_acceptance: 0.5,
         adaptation_interval: 100,
     };
 
-    // Run VMC simulation
-    println!("Running VMC simulation...");
-    println!("════════════════════════════");
-    let mut simulation = MCMCSimulation::new(heg, params);
-    let results = simulation.run();
+    // Run VMC simulation with twist averaging
+    println!("Running VMC simulation with {} twist(s)...", num_twists);
+    println!("════════════════════════════════════════════");
+    
+    let mut total_energy = 0.0;
+    let mut total_variance = 0.0;
+    
+    for (i, twist) in twist_grid.iter().enumerate() {
+        if num_twists > 1 && (i == 0 || (i + 1) % 10 == 0 || i == num_twists - 1) {
+            println!("  Twist {}/{}: θ = ({:.3}, {:.3}, {:.3})", 
+                i + 1, num_twists, twist.x, twist.y, twist.z);
+        }
+        
+        // Create HEG with this twist
+        let heg = HomogeneousElectronGas::new_with_twist(
+            args.electrons, args.rs, jastrow_f, *twist
+        );
+        
+        let mut simulation = MCMCSimulation::new(heg, params.clone());
+        let results = simulation.run();
+        
+        total_energy += results.energy;
+        total_variance += results.error * results.error;
+    }
+    
+    // Average over twists
+    let avg_energy = total_energy / num_twists as f64;
+    let avg_error = (total_variance / num_twists as f64).sqrt();
 
     // Compute per-electron energy
-    let energy_per_electron = results.energy / args.electrons as f64;
-    let error_per_electron = results.error / args.electrons as f64;
+    let energy_per_electron = avg_energy / args.electrons as f64;
+    let error_per_electron = avg_error / args.electrons as f64;
     
     // Estimate correlation energy
     let correlation_estimate = energy_per_electron - e_hf;
@@ -142,7 +176,11 @@ fn main() {
     println!("║                          RESULTS                              ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║                                                              ║");
-    println!("  Total energy:        {:.6} ± {:.6} Ha", results.energy, results.error);
+    if num_twists > 1 {
+        println!("  [Twist-averaged over {} k-points]", num_twists);
+        println!("║                                                              ║");
+    }
+    println!("  Total energy:        {:.6} ± {:.6} Ha", avg_energy, avg_error);
     println!("  Energy per electron: {:.6} ± {:.6} Ha", energy_per_electron, error_per_electron);
     println!("  Energy per electron: {:.4} ± {:.4} eV", 
         energy_per_electron * HA_TO_EV, error_per_electron * HA_TO_EV);
@@ -154,8 +192,6 @@ fn main() {
         correlation_estimate - e_c_ref,
         100.0 * (correlation_estimate - e_c_ref).abs() / e_c_ref.abs());
     println!("║                                                              ║");
-    println!("  Autocorrelation:     {:.2} steps", results.autocorrelation_time);
-    println!("║                                                              ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -166,3 +202,4 @@ fn main() {
     println!();
     println!("Run at multiple rs values (1, 2, 5, 10, 20, 50, 100) to fit LDA functional.");
 }
+

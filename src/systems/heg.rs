@@ -199,7 +199,6 @@ impl HomogeneousElectronGas {
     fn generate_k_vectors(n: usize, box_length: f64) -> Vec<Vector3<f64>> {
         Self::generate_k_vectors_with_twist(n, box_length, &Vector3::zeros())
     }
-    }
 
     /// Generate reciprocal space vectors for Ewald summation.
     fn generate_ewald_k_vectors(box_length: f64, alpha: f64) -> Vec<(Vector3<f64>, f64)> {
