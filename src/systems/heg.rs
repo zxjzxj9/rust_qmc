@@ -533,24 +533,106 @@ impl HomogeneousElectronGas {
 
     /// Compute kinetic energy from the plane-wave Slater-Jastrow wavefunction.
     /// 
-    /// T = T_Slater + T_Jastrow
+    /// For Ψ = D × J where D is complex Slater determinant and J is real Jastrow:
+    /// T = -½ Re(∇²Ψ/Ψ) = -½ Re(∇²D/D + ∇²J/J + 2(∇D/D)·(∇J/J))
     /// 
-    /// where T_Slater = Σⱼ k²ⱼ/2 (sum over occupied momenta)
-    ///       T_Jastrow = -½ Σᵢ [∇²J + (∇J)²] (Jastrow contribution)
+    /// For plane waves:
+    /// - ∇²D/D = -Σₖ k² (configuration-independent, sum over occupied k-vectors)
+    /// - ∇J/J = ∇ln(J) (Jastrow gradient)
+    /// - ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (imaginary gradient from Slater inverse)
+    /// 
+    /// The cross term 2(∇D/D)·(∇J/J) has an imaginary part that contributes
+    /// to the kinetic energy when we take the real part!
     fn kinetic_energy(&self, positions: &[Vector3<f64>]) -> f64 {
-        // Slater kinetic energy (sum of occupied k² values)
+        // === Part 1: Slater kinetic (configuration-independent) ===
+        // T_slater = ½ Σₖ k² (sum over all occupied k-vectors)
         let t_slater = self.kinetic_slater();
         
-        // Jastrow contributions
+        // === Part 2: Jastrow kinetic ===
+        // T_jastrow = -½ Σᵢ (∇²J/J + (∇J/J)²) = -½ Σᵢ (∇²ln(J) + |∇ln(J)|²)
         let grad_j = self.jastrow_gradient(positions);
         let lap_j = self.jastrow_laplacian(positions);
 
-        // T_Jastrow = -½ Σᵢ (∇²J + (∇J)²)
         let t_jastrow: f64 = (0..positions.len())
             .map(|i| -0.5 * (lap_j[i] + grad_j[i].norm_squared()))
             .sum();
 
-        t_slater + t_jastrow
+        // === Part 3: Cross term between Slater and Jastrow ===
+        // T_cross = -Re(Σᵢ (∇D/D)ᵢ · (∇J/J)ᵢ)
+        // For plane waves: (∇D/D)ᵢ = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (purely imaginary)
+        // Since (∇D/D) is purely imaginary and (∇J/J) is real,
+        // the dot product is purely imaginary, so Re(...) = 0.
+        // 
+        // HOWEVER, when using |D| instead of D, there's a subtlety:
+        // The phase θ of D = |D|e^{iθ} contributes ½(∇θ)² to kinetic energy.
+        // For a Slater determinant, this phase varies with electron positions.
+        // 
+        // For twist-averaged BC, the twist shifts all k-vectors which changes
+        // the phase structure and should average out shell effects.
+        // 
+        // The cross term contribution is typically small for well-optimized
+        // Jastrow factors. We compute it for completeness.
+        let t_cross = self.kinetic_cross_term_real(positions, &grad_j);
+
+        t_slater + t_jastrow + t_cross
+    }
+
+    /// Compute the real part of the cross term: -Re(Σᵢ (∇ ln D)ᵢ · (∇ ln J)ᵢ)
+    /// 
+    /// For plane waves, ∇ln(D) = Σⱼ (A⁻¹)ⱼᵢ × (∇φⱼ/φⱼ) = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ
+    /// This is purely imaginary, so the real part of the cross term with
+    /// real ∇ln(J) vanishes.
+    /// 
+    /// However, for |D|×J, we need the gradient of ln|D| = Re(ln D).
+    /// Using d/dx|D| = |D| × Re((∇D/D)), we get:
+    /// ∇ln|D| = Re(∇ln D) = Re(Σⱼ (A⁻¹)ⱼᵢ × ikⱼ) = 0 for plane waves.
+    /// 
+    /// So the cross term is indeed zero for plane waves!
+    fn kinetic_cross_term_real(&self, positions: &[Vector3<f64>], grad_j: &[Vector3<f64>]) -> f64 {
+        // Split positions by spin
+        let r_up: Vec<_> = positions[..self.num_up].to_vec();
+        let r_down: Vec<_> = positions[self.num_up..].to_vec();
+
+        let mut cross = 0.0;
+
+        // Spin-up electrons
+        if let Some(inv_up) = self.slater_inverse(&r_up, &self.k_vectors_up) {
+            for i in 0..self.num_up {
+                // ∇ln|D_↑|ᵢ = Re(Σⱼ (A⁻¹)ⱼᵢ × ikⱼ) = Σⱼ Re((A⁻¹)ⱼᵢ) × (-kⱼ_imag) + Im((A⁻¹)ⱼᵢ) × kⱼ_real
+                // For real k-vectors (no imaginary part), this becomes:
+                // ∇ln|D|ᵢ = Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+                let mut grad_ln_d_real = Vector3::<f64>::zeros();
+                for j in 0..self.num_up {
+                    let inv_elem = inv_up[(j, i)];
+                    let k = &self.k_vectors_up[j];
+                    // The gradient of ln|D| involves Im(A⁻¹) × k (since ik × A⁻¹ gives i × k × A⁻¹)
+                    // Re(i × k × A⁻¹) = -k × Im(A⁻¹)
+                    grad_ln_d_real.x += -k.x * inv_elem.im;
+                    grad_ln_d_real.y += -k.y * inv_elem.im;
+                    grad_ln_d_real.z += -k.z * inv_elem.im;
+                }
+                // Cross term contribution
+                cross -= grad_ln_d_real.dot(&grad_j[i]);
+            }
+        }
+
+        // Spin-down electrons
+        if let Some(inv_down) = self.slater_inverse(&r_down, &self.k_vectors_down) {
+            for i in 0..self.num_down {
+                let mut grad_ln_d_real = Vector3::<f64>::zeros();
+                for j in 0..self.num_down {
+                    let inv_elem = inv_down[(j, i)];
+                    let k = &self.k_vectors_down[j];
+                    grad_ln_d_real.x += -k.x * inv_elem.im;
+                    grad_ln_d_real.y += -k.y * inv_elem.im;
+                    grad_ln_d_real.z += -k.z * inv_elem.im;
+                }
+                let global_i = i + self.num_up;
+                cross -= grad_ln_d_real.dot(&grad_j[global_i]);
+            }
+        }
+
+        cross
     }
 
     /// Compute cross term: -Σᵢ ∇ₗₙD · ∇J
