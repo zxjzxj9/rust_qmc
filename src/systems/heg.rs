@@ -780,7 +780,11 @@ impl EnergyCalculator for HomogeneousElectronGas {
         // Wrap positions for periodic boundaries
         let wrapped: Vec<_> = r.iter().map(|&pos| self.wrap_position(pos)).collect();
 
-        // Kinetic energy using analytical formula (more stable than numerical)
+        // Kinetic energy using analytical formula
+        // For |D|×J wavefunction:
+        // - T_slater = ½Σk² (from plane-wave Laplacian identity)
+        // - T_jastrow = -½(∇²J/J + (∇J/J)²)
+        // - T_cross = 0 (since ∇|D|/|D| ≈ 0 for uniform density)
         let kinetic = self.kinetic_energy(&wrapped);
 
         // Potential energy from Ewald sum
