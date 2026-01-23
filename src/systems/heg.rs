@@ -635,6 +635,18 @@ impl HomogeneousElectronGas {
         cross
     }
 
+    /// Compute the complex VMC cross term: -Re((∇D/D) · (∇J/J))
+    /// 
+    /// For Ψ = D×J with complex D and real J, the cross term in kinetic energy is:
+    /// T_cross = -Re((∇D/D) · (∇J/J)) = -Re(∇D/D) · (∇J/J)
+    /// 
+    /// For plane waves: ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ
+    /// Re(∇D/D) = -Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+    fn complex_cross_term(&self, positions: &[Vector3<f64>], grad_j: &[Vector3<f64>]) -> f64 {
+        // This is identical to kinetic_cross_term_real
+        self.kinetic_cross_term_real(positions, grad_j)
+    }
+
     /// Compute cross term: -Σᵢ ∇ₗₙD · ∇J
     /// 
     /// For plane waves, ∇ₗₙD is purely imaginary (ik terms).
@@ -780,12 +792,44 @@ impl EnergyCalculator for HomogeneousElectronGas {
         // Wrap positions for periodic boundaries
         let wrapped: Vec<_> = r.iter().map(|&pos| self.wrap_position(pos)).collect();
 
-        // Kinetic energy using analytical formula
-        // For |D|×J wavefunction:
-        // - T_slater = ½Σk² (from plane-wave Laplacian identity)
-        // - T_jastrow = -½(∇²J/J + (∇J/J)²)
-        // - T_cross = 0 (since ∇|D|/|D| ≈ 0 for uniform density)
-        let kinetic = self.kinetic_energy(&wrapped);
+        // === COMPLEX VMC LOCAL ENERGY ===
+        // For Ψ = D × J where D is complex Slater determinant and J is real Jastrow:
+        // E_L = Re(-½ ∇²Ψ/Ψ) + V
+        //     = Re(-½ ∇²D/D) - ½∇²J/J - ½(∇J/J)² - Re((∇D/D)·(∇J/J)) + V
+        //
+        // For plane waves:
+        // - Re(-½ ∇²D/D) = ½ Σₖ k²  (Slater kinetic, real and positive)
+        // - ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (purely imaginary)
+        // - Re((∇D/D)·(∇J/J)) = Im(∇D/D) · ∇J/J (cross term)
+        
+        // Part 1: Slater kinetic energy (configuration-independent)
+        let t_slater = self.kinetic_slater();
+        
+        // Part 2: Jastrow kinetic and gradient
+        let grad_j = self.jastrow_gradient(&wrapped);
+        let lap_j = self.jastrow_laplacian(&wrapped);
+
+        let t_jastrow: f64 = (0..wrapped.len())
+            .map(|i| -0.5 * (lap_j[i] + grad_j[i].norm_squared()))
+            .sum();
+
+        // Part 3: Cross term Re((∇D/D)·(∇J/J))
+        // Since ∇D/D = i × k × (sum of A⁻¹ terms), we have:
+        // Re((i × k × A⁻¹) · (∇J/J)) = -Im(k × A⁻¹) · ∇J/J = k · Re(A⁻¹) · ∇J/J
+        // Wait, this is getting confusing. Let me be more careful:
+        //
+        // ∇D/D for electron i = Σⱼ (A⁻¹)ⱼᵢ × (∇φⱼ/φⱼ) = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ
+        // This is purely imaginary: ∇D/D = i × Σⱼ Re((A⁻¹)ⱼᵢ) × kⱼ + i² × Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ 
+        //                               = i × Σⱼ Re((A⁻¹)ⱼᵢ) × kⱼ - Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+        //
+        // Real part of ∇D/D: -Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+        // Imag part of ∇D/D: Σⱼ Re((A⁻¹)ⱼᵢ) × kⱼ
+        //
+        // Cross term: Re((∇D/D) · (∇J/J)) = Re(∇D/D) · (∇J/J)
+        //           = -Σᵢ [Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ] · (∇J/J)ᵢ
+        let t_cross = self.complex_cross_term(&wrapped, &grad_j);
+
+        let kinetic = t_slater + t_jastrow + t_cross;
 
         // Potential energy from Ewald sum
         let potential = self.ewald_potential(&wrapped);
