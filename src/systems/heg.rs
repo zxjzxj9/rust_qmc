@@ -793,35 +793,31 @@ impl EnergyCalculator for HomogeneousElectronGas {
         let wrapped: Vec<_> = r.iter().map(|&pos| self.wrap_position(pos)).collect();
 
         // === COMPLEX VMC LOCAL ENERGY ===
-        // For Ψ = D × J where D is complex Slater determinant and J is real Jastrow:
+        // For Ψ = D × J where D is complex Slater determinant and J = exp(u) is real Jastrow:
         //
         // ∇²Ψ/Ψ = ∇²D/D + ∇²J/J + 2(∇D/D)·(∇J/J)
         //
         // E_L = Re(-½ ∇²Ψ/Ψ) + V
         //     = Re(-½ ∇²D/D) - ½∇²J/J - Re((∇D/D)·(∇J/J)) + V
-        //     = T_slater + T_jastrow_lap + T_cross + V
         //
-        // For plane waves:
-        // - ∇²D/D = -Σₖ k² (real), so Re(-½∇²D/D) = ½Σk²
-        // - ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (purely imaginary)
-        // - Re((∇D/D)·(∇J/J)) = Re(∇D/D) · (∇J/J)
+        // For J = exp(u): ∇J/J = ∇u, ∇²J/J = ∇²u + |∇u|²
+        // Note: jastrow_laplacian returns ∇²u, jastrow_gradient returns ∇u
         
-        // Part 1: Slater kinetic energy = ½Σk²
+        // Part 1: Slater kinetic energy = ½Σk² (since ∇²D/D = -Σk² for plane waves)
         let t_slater = self.kinetic_slater();
         
-        // Part 2: Jastrow Laplacian contribution = -½ Σᵢ ∇²ln(J)
-        // Note: For D×J wavefunction, we DON'T include the (∇J/J)² term!
-        // That term only appears for |Ψ|² normalization, not for D×J.
-        let lap_j = self.jastrow_laplacian(&wrapped);
-        let t_jastrow_lap: f64 = (0..wrapped.len())
-            .map(|i| -0.5 * lap_j[i])
+        // Part 2: Jastrow contribution = -½ ∇²J/J = -½(∇²u + |∇u|²)
+        let grad_j = self.jastrow_gradient(&wrapped);  // This is ∇u = ∇ln(J)
+        let lap_u = self.jastrow_laplacian(&wrapped);   // This is ∇²u
+
+        let t_jastrow: f64 = (0..wrapped.len())
+            .map(|i| -0.5 * (lap_u[i] + grad_j[i].norm_squared()))
             .sum();
 
-        // Part 3: Cross term = -Re((∇D/D)·(∇J/J))
-        let grad_j = self.jastrow_gradient(&wrapped);
+        // Part 3: Cross term = -Re((∇D/D)·(∇J/J)) = -Re(∇D/D)·∇u
         let t_cross = self.complex_cross_term(&wrapped, &grad_j);
 
-        let kinetic = t_slater + t_jastrow_lap + t_cross;
+        let kinetic = t_slater + t_jastrow + t_cross;
 
         // Potential energy from Ewald sum
         let potential = self.ewald_potential(&wrapped);
