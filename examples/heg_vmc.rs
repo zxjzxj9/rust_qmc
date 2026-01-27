@@ -9,7 +9,7 @@
 //! Options:
 //!   -n, --electrons <N>     Number of electrons (use 2, 14, 38, 54, 66) [default: 14]
 //!   -r, --rs <RS>           Wigner-Seitz radius in Bohr [default: 4.0]
-//!   -j, --jastrow <F>       Jastrow parameter F [default: rs/2]
+//!   -j, --jastrow <F>       Jastrow parameter F [default: 1.25*rs]
 //!   -s, --steps <N>         Number of VMC steps [default: 100000]
 //!   -w, --walkers <N>       Number of walkers [default: 10]
 //!   -t, --twists <N>        Monkhorst-Pack grid size for TABC (N×N×N) [default: 1]
@@ -79,8 +79,8 @@ fn main() {
         println!("Recommended: {:?}", closed_shell);
     }
 
-    // Jastrow parameter defaults to rs/2
-    let jastrow_f = args.jastrow.unwrap_or(args.rs / 2.0);
+    // Jastrow parameter defaults to 1.25*rs (optimized for correlation energy accuracy)
+    let jastrow_f = args.jastrow.unwrap_or(1.25 * args.rs);
 
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");

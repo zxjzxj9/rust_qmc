@@ -78,7 +78,7 @@ impl HomogeneousElectronGas {
     /// # Arguments
     /// * `num_electrons` - Total number of electrons (use closed-shell numbers: 2, 14, 38, 54, 66)
     /// * `rs` - Wigner-Seitz radius in Bohr (typical range: 1-10)
-    /// * `jastrow_f` - Jastrow parameter F (controls range, typically rs/2 to rs)
+    /// * `jastrow_f` - Jastrow parameter F (recommended: 1.25×rs for optimal correlation)
     pub fn new(num_electrons: usize, rs: f64, jastrow_f: f64) -> Self {
         Self::new_with_twist(num_electrons, rs, jastrow_f, Vector3::zeros())
     }
