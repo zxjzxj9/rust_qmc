@@ -79,8 +79,8 @@ fn main() {
         println!("Recommended: {:?}", closed_shell);
     }
 
-    // Jastrow parameter defaults to 1.25*rs (optimized for correlation energy accuracy)
-    let jastrow_f = args.jastrow.unwrap_or(1.25 * args.rs);
+    // Jastrow parameter defaults to 5.5 (optimized for correlation energy accuracy at rs≈4)
+    let jastrow_f = args.jastrow.unwrap_or(5.5);
 
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");
