@@ -17,6 +17,27 @@ use std::f64::consts::PI;
 use crate::sampling::EnergyCalculator;
 use crate::wavefunction::MultiWfn;
 
+/// Jastrow correlation factor functional form.
+///
+/// All forms satisfy the Kato cusp conditions:
+/// - du/dr|_{r→0} = 1/4 for opposite-spin pairs
+/// - du/dr|_{r→0} = 1/2 for same-spin pairs
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum JastrowForm {
+    /// Padé form: u(r) = A*r/(1 + r/F)
+    /// Simple rational form with one parameter F.
+    Pade,
+    
+    /// RPA-inspired form: u(r) = A*r/(1 + B*r + C*r²)
+    /// Better long-range behavior with quadratic denominator.
+    /// Uses B = 1/F, C = 0.2/F² by default.
+    RPA,
+    
+    /// Yukawa-screened form: u(r) = A*r*exp(-r/λ)/(1 + r/λ)
+    /// Exponential screening with proper cusp.
+    Yukawa,
+}
+
 /// Homogeneous Electron Gas (Jellium) wavefunction.
 ///
 /// Uses a Slater-Jastrow trial wavefunction:
@@ -49,8 +70,10 @@ pub struct HomogeneousElectronGas {
     jastrow_a_same: f64,
     /// Jastrow parameter A for opposite-spin pairs (satisfies cusp = 1/4)
     jastrow_a_anti: f64,
-    /// Jastrow RPA parameter F
+    /// Jastrow RPA parameter F (length scale)
     jastrow_f: f64,
+    /// Jastrow functional form
+    jastrow_form: JastrowForm,
     /// Ewald alpha parameter
     ewald_alpha: f64,
     /// Precomputed reciprocal space vectors for Ewald
@@ -78,22 +101,33 @@ impl HomogeneousElectronGas {
     /// # Arguments
     /// * `num_electrons` - Total number of electrons (use closed-shell numbers: 2, 14, 38, 54, 66)
     /// * `rs` - Wigner-Seitz radius in Bohr (typical range: 1-10)
-    /// * `jastrow_f` - Jastrow parameter F (recommended: 1.25×rs for optimal correlation)
+    /// * `jastrow_f` - Jastrow parameter F (recommended: 5.5 for rs≈4)
     pub fn new(num_electrons: usize, rs: f64, jastrow_f: f64) -> Self {
-        Self::new_with_twist(num_electrons, rs, jastrow_f, Vector3::zeros())
+        Self::new_with_twist_and_form(num_electrons, rs, jastrow_f, Vector3::zeros(), JastrowForm::Pade)
     }
 
-    /// Create a new HEG system with a specified twist vector.
+    /// Create a new HEG system with specified Jastrow form.
+    pub fn new_with_form(num_electrons: usize, rs: f64, jastrow_f: f64, form: JastrowForm) -> Self {
+        Self::new_with_twist_and_form(num_electrons, rs, jastrow_f, Vector3::zeros(), form)
+    }
+
+    /// Create a new HEG system with a specified twist vector (uses Padé Jastrow).
+    pub fn new_with_twist(num_electrons: usize, rs: f64, jastrow_f: f64, twist: Vector3<f64>) -> Self {
+        Self::new_with_twist_and_form(num_electrons, rs, jastrow_f, twist, JastrowForm::Pade)
+    }
+
+    /// Create a new HEG system with a specified twist vector and Jastrow form.
     ///
     /// # Arguments
     /// * `num_electrons` - Total number of electrons
     /// * `rs` - Wigner-Seitz radius in Bohr
     /// * `jastrow_f` - Jastrow parameter F
     /// * `twist` - Twist vector in reduced coordinates [-0.5, 0.5]³
+    /// * `form` - Jastrow functional form (Pade, RPA, or Yukawa)
     ///
     /// The twist shifts all k-vectors: k → k + θ×(2π/L)
     /// This is used for twist-averaged boundary conditions (TABC).
-    pub fn new_with_twist(num_electrons: usize, rs: f64, jastrow_f: f64, twist: Vector3<f64>) -> Self {
+    pub fn new_with_twist_and_form(num_electrons: usize, rs: f64, jastrow_f: f64, twist: Vector3<f64>, form: JastrowForm) -> Self {
         // Box length from rs: L = (4π/3 · N)^(1/3) · rs
         let box_length = (4.0 * PI / 3.0 * num_electrons as f64).powf(1.0 / 3.0) * rs;
 
@@ -127,6 +161,7 @@ impl HomogeneousElectronGas {
             jastrow_a_same,
             jastrow_a_anti,
             jastrow_f,
+            jastrow_form: form,
             ewald_alpha,
             ewald_k_vectors,
         }
@@ -310,14 +345,100 @@ impl HomogeneousElectronGas {
 
     /// Evaluate Jastrow correlation function u(r) for a pair.
     /// 
-    /// Using the Padé form: u(r) = A * r / (1 + r/F)
-    /// This satisfies the cusp condition: du/dr|_{r=0} = A
+    /// All forms satisfy the cusp condition: du/dr|_{r=0} = A
     #[inline]
     fn jastrow_u(&self, r: f64, a: f64) -> f64 {
         if r < 1e-10 {
             return 0.0;
         }
-        a * r / (1.0 + r / self.jastrow_f)
+        let f = self.jastrow_f;
+        match self.jastrow_form {
+            JastrowForm::Pade => {
+                // u(r) = A * r / (1 + r/F)
+                a * r / (1.0 + r / f)
+            }
+            JastrowForm::RPA => {
+                // u(r) = A * r / (1 + B*r + C*r²)
+                // with B = 1/F, C = 0.2/F² for better long-range behavior
+                let b = 1.0 / f;
+                let c = 0.2 / (f * f);
+                a * r / (1.0 + b * r + c * r * r)
+            }
+            JastrowForm::Yukawa => {
+                // u(r) = A * r * exp(-r/λ) / (1 + r/λ)
+                // This satisfies cusp: du/dr|_{r=0} = A
+                let exp_factor = (-r / f).exp();
+                a * r * exp_factor / (1.0 + r / f)
+            }
+        }
+    }
+    
+    /// Compute du/dr for a given r and cusp parameter A.
+    #[inline]
+    fn jastrow_du_dr(&self, r: f64, a: f64) -> f64 {
+        if r < 1e-10 {
+            return a; // Cusp condition
+        }
+        let f = self.jastrow_f;
+        match self.jastrow_form {
+            JastrowForm::Pade => {
+                // du/dr = A * F² / (F + r)²
+                a * f * f / (f + r).powi(2)
+            }
+            JastrowForm::RPA => {
+                // u = A*r / (1 + B*r + C*r²)
+                // du/dr = A * (1 - C*r²) / (1 + B*r + C*r²)²
+                let b = 1.0 / f;
+                let c = 0.2 / (f * f);
+                let denom = 1.0 + b * r + c * r * r;
+                a * (1.0 - c * r * r) / (denom * denom)
+            }
+            JastrowForm::Yukawa => {
+                // u = A * r * exp(-r/F) / (1 + r/F)
+                // du/dr = A * exp(-r/F) * (1 - r/F - r²/F²) / (1 + r/F)²
+                let x = r / f;
+                let exp_factor = (-x).exp();
+                let denom = (1.0 + x).powi(2);
+                a * exp_factor * (1.0 - x - x * x) / denom
+            }
+        }
+    }
+    
+    /// Compute ∇²u (Laplacian) for a given r and cusp parameter A.
+    #[inline]
+    fn jastrow_lap_u(&self, r: f64, a: f64) -> f64 {
+        if r < 1e-10 {
+            return 0.0; // Regularized at origin
+        }
+        let f = self.jastrow_f;
+        match self.jastrow_form {
+            JastrowForm::Pade => {
+                // ∇²u = 2*A*F³ / (r*(F+r)³)
+                2.0 * a * f.powi(3) / (r * (f + r).powi(3))
+            }
+            JastrowForm::RPA => {
+                // For u = A*r/(1+B*r+C*r²), use numerical ∇²u = d²u/dr² + 2/r * du/dr
+                let b = 1.0 / f;
+                let c = 0.2 / (f * f);
+                let denom = 1.0 + b * r + c * r * r;
+                // First derivative
+                let du_dr = a * (1.0 - c * r * r) / (denom * denom);
+                // Second derivative (analytically derived)
+                let d2u_dr2 = -a * 2.0 * (c * r * denom + (1.0 - c * r * r) * (b + 2.0 * c * r)) / denom.powi(3);
+                d2u_dr2 + 2.0 / r * du_dr
+            }
+            JastrowForm::Yukawa => {
+                // Numerical form using du/dr
+                let x = r / f;
+                let exp_factor = (-x).exp();
+                let denom = (1.0 + x).powi(2);
+                let du_dr = a * exp_factor * (1.0 - x - x * x) / denom;
+                // Second derivative (using product rule)
+                let d2u_dr2 = a * exp_factor / (f * f * (1.0 + x).powi(3)) * 
+                    (-3.0 - 3.0 * x + x * x + x * x * x);
+                d2u_dr2 + 2.0 / r * du_dr
+            }
+        }
     }
 
     /// Evaluate periodic Jastrow factor.
@@ -342,17 +463,13 @@ impl HomogeneousElectronGas {
         u_sum.exp()
     }
 
-    /// Compute gradient of u(r) = A*r/(1+r/F)
-    /// ∇u = A * (1/(1+r/F)² * F/r - 1/(1+r/F) * 1/r) * rij... wait let me redo this
+    /// Compute gradient of Jastrow u function.
     /// 
-    /// u(r) = A*r/(1+r/F) = A*F*r/(F+r)
-    /// du/dr = A*F * (F+r - r) / (F+r)² = A*F² / (F+r)²
-    /// ∇ᵢu = du/dr * rij/r for pair (i,j)
+    /// ∇ᵢu = du/dr × rij/r for pair (i,j)
     fn jastrow_gradient(&self, positions: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         let n = positions.len();
         let mut grad = vec![Vector3::zeros(); n];
         let l_half = self.box_length / 2.0;
-        let f = self.jastrow_f;
 
         for i in 0..n {
             for j in (i + 1)..n {
@@ -361,8 +478,7 @@ impl HomogeneousElectronGas {
 
                 if r < l_half && r > 1e-10 {
                     let a = self.jastrow_a(i, j);
-                    // du/dr = A * F² / (F + r)²
-                    let du_dr = a * f * f / (f + r).powi(2);
+                    let du_dr = self.jastrow_du_dr(r, a);
                     let grad_ij = du_dr * rij / r;
                     grad[i] += grad_ij;
                     grad[j] -= grad_ij;
@@ -372,22 +488,11 @@ impl HomogeneousElectronGas {
         grad
     }
 
-    /// Compute Laplacian of Jastrow factor.
-    /// 
-    /// For u(r) = A*F*r/(F+r):
-    /// du/dr = A*F²/(F+r)²
-    /// d²u/dr² = -2*A*F²/(F+r)³
-    /// 
-    /// ∇²u = d²u/dr² + (2/r) * du/dr
-    ///     = -2*A*F²/(F+r)³ + 2*A*F²/(r*(F+r)²)
-    ///     = 2*A*F² * (1/(r*(F+r)²) - 1/(F+r)³)
-    ///     = 2*A*F² / (F+r)² * (1/r - 1/(F+r))
-    ///     = 2*A*F³ / (r*(F+r)³)
+    /// Compute Laplacian of Jastrow u function.
     fn jastrow_laplacian(&self, positions: &[Vector3<f64>]) -> Vec<f64> {
         let n = positions.len();
         let mut lap = vec![0.0; n];
         let l_half = self.box_length / 2.0;
-        let f = self.jastrow_f;
 
         for i in 0..n {
             for j in (i + 1)..n {
@@ -396,8 +501,7 @@ impl HomogeneousElectronGas {
 
                 if r < l_half && r > 1e-10 {
                     let a = self.jastrow_a(i, j);
-                    // ∇²u = 2*A*F³ / (r*(F+r)³)
-                    let lap_u = 2.0 * a * f.powi(3) / (r * (f + r).powi(3));
+                    let lap_u = self.jastrow_lap_u(r, a);
                     lap[i] += lap_u;
                     lap[j] += lap_u;
                 }
