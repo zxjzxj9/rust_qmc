@@ -15,7 +15,7 @@
 //!   -t, --twists <N>        Monkhorst-Pack grid size for TABC (N×N×N) [default: 1]
 
 use clap::Parser;
-use rust_qmc::{HomogeneousElectronGas, MCMCParams, MCMCSimulation};
+use rust_qmc::{HomogeneousElectronGas, JastrowForm, MCMCParams, MCMCSimulation};
 
 /// Homogeneous Electron Gas VMC Simulation
 #[derive(Parser, Debug)]
@@ -44,6 +44,10 @@ struct Args {
     /// Monkhorst-Pack grid size for twist-averaging (N×N×N twists)
     #[arg(short = 't', long, default_value_t = 1)]
     twists: usize,
+
+    /// Jastrow functional form: pade, rpa, or yukawa
+    #[arg(short = 'f', long, default_value = "pade")]
+    form: String,
 }
 
 /// Hartree to eV conversion factor
@@ -82,6 +86,17 @@ fn main() {
     // Jastrow parameter defaults to 5.5 (optimized for correlation energy accuracy at rs≈4)
     let jastrow_f = args.jastrow.unwrap_or(5.5);
 
+    // Parse Jastrow form
+    let jastrow_form = match args.form.to_lowercase().as_str() {
+        "pade" | "padé" => JastrowForm::Pade,
+        "rpa" => JastrowForm::RPA,
+        "yukawa" => JastrowForm::Yukawa,
+        other => {
+            eprintln!("Unknown Jastrow form '{}'. Using Padé.", other);
+            JastrowForm::Pade
+        }
+    };
+
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
@@ -96,7 +111,7 @@ fn main() {
     let num_twists = twist_grid.len();
 
     // Create first HEG for display purposes
-    let heg_display = HomogeneousElectronGas::new(args.electrons, args.rs, jastrow_f);
+    let heg_display = HomogeneousElectronGas::new_with_form(args.electrons, args.rs, jastrow_f, jastrow_form);
 
     println!("Simulation Parameters:");
     println!("══════════════════════");
@@ -107,6 +122,7 @@ fn main() {
     println!("  Density n:           {:.6} electrons/Bohr³", 
         args.electrons as f64 / heg_display.box_length.powi(3));
     println!("  Jastrow F:           {:.2}", jastrow_f);
+    println!("  Jastrow form:        {:?}", jastrow_form);
     println!("  VMC walkers:         {}", args.walkers);
     println!("  VMC steps:           {}", args.steps);
     println!("  Twist grid:          {}×{}×{} = {} twists", 
@@ -148,9 +164,9 @@ fn main() {
                 i + 1, num_twists, twist.x, twist.y, twist.z);
         }
         
-        // Create HEG with this twist
-        let heg = HomogeneousElectronGas::new_with_twist(
-            args.electrons, args.rs, jastrow_f, *twist
+        // Create HEG with this twist and Jastrow form
+        let heg = HomogeneousElectronGas::new_with_twist_and_form(
+            args.electrons, args.rs, jastrow_f, *twist, jastrow_form
         );
         
         let mut simulation = MCMCSimulation::new(heg, params.clone());
