@@ -83,10 +83,7 @@ fn main() {
         println!("Recommended: {:?}", closed_shell);
     }
 
-    // Jastrow parameter defaults to 5.5 (optimized for correlation energy accuracy at rs≈4)
-    let jastrow_f = args.jastrow.unwrap_or(5.5);
-
-    // Parse Jastrow form
+    // Parse Jastrow form first (needed for default F)
     let jastrow_form = match args.form.to_lowercase().as_str() {
         "pade" | "padé" => JastrowForm::Pade,
         "rpa" => JastrowForm::RPA,
@@ -96,6 +93,14 @@ fn main() {
             JastrowForm::Pade
         }
     };
+
+    // Form-specific default F values (optimized for rs≈4)
+    let default_f = match jastrow_form {
+        JastrowForm::Pade => 5.5,
+        JastrowForm::RPA => 7.0,
+        JastrowForm::Yukawa => 15.0,
+    };
+    let jastrow_f = args.jastrow.unwrap_or(default_f);
 
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");
