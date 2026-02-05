@@ -2,4 +2,4 @@
 
 mod jastrow;
 
-pub use jastrow::{Jastrow1, Jastrow2};
+pub use jastrow::{Jastrow1, Jastrow2, Jastrow3};
