@@ -12,5 +12,5 @@ pub use lithium::Lithium;
 pub use crystal::{LatticeVector, LithiumCrystalWalker};
 pub use lithium_fcc::LithiumFCC;
 pub use heg::{HomogeneousElectronGas, HEGResults, JastrowForm};
-pub use methane::Methane;
+pub use methane::{Methane, MethaneGTO};
 
