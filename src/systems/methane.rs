@@ -10,6 +10,15 @@ use crate::correlation::{Jastrow2, Jastrow3};
 use crate::sampling::EnergyCalculator;
 use crate::wavefunction::MultiWfn;
 
+/// Parameters for Jastrow optimization.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JastrowParams {
+    /// Electron-electron decay parameter
+    pub b_ee: f64,
+    /// Electron-nucleus decay parameter  
+    pub b_en: f64,
+}
+
 /// Tetrahedral bond length in Bohr (1.087 Å ≈ 2.05 Bohr)
 const CH_BOND_LENGTH: f64 = 2.05;
 
@@ -812,6 +821,27 @@ impl MethaneGTO {
         }
         
         v_nn
+    }
+    
+    /// Get current Jastrow parameters.
+    pub fn get_jastrow_params(&self) -> JastrowParams {
+        JastrowParams {
+            b_ee: self.jastrow.b_ee,
+            b_en: self.jastrow.b_en,
+        }
+    }
+    
+    /// Set Jastrow parameters (mutates self).
+    pub fn set_jastrow_params(&mut self, params: JastrowParams) {
+        self.jastrow.b_ee = params.b_ee;
+        self.jastrow.b_en = params.b_en;
+    }
+    
+    /// Create a new wavefunction with different Jastrow parameters.
+    pub fn with_jastrow_params(&self, params: JastrowParams) -> Self {
+        let mut new_wfn = self.clone();
+        new_wfn.set_jastrow_params(params);
+        new_wfn
     }
 }
 

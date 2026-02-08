@@ -5,9 +5,11 @@ mod vmc;
 mod dmc;
 mod pimc;
 mod pimc_fermion;
+mod optimize;
 
 pub use traits::{EnergyCalculator, Walker, BranchingResult, VmcWalker};
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation};
+pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
 pub use dmc::{run_dmc_sampling, HarmonicWalker, HydrogenAtomWalker, HydrogenMoleculeWalker};
 pub use pimc::{
     QuantumPath, PIMCSimulation, run_pimc_harmonic,

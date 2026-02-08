@@ -12,8 +12,8 @@ pub mod io;
 // Re-export commonly used types at crate root
 pub use wavefunction::{SingleWfn, MultiWfn, STO, Slater1s, STOSlaterDet, init_li_sto};
 pub use correlation::{Jastrow1, Jastrow2, Jastrow3};
-pub use systems::{H2MoleculeVB, H2MoleculeMO, Lithium, LatticeVector, LithiumCrystalWalker, LithiumFCC, HomogeneousElectronGas, HEGResults, JastrowForm, Methane, MethaneGTO};
-pub use sampling::{EnergyCalculator, MCMCParams, MCMCSimulation, MCMCResults, Walker, BranchingResult, VmcWalker};
+pub use systems::{H2MoleculeVB, H2MoleculeMO, Lithium, LatticeVector, LithiumCrystalWalker, LithiumFCC, HomogeneousElectronGas, HEGResults, JastrowForm, Methane, MethaneGTO, JastrowParams};
+pub use sampling::{EnergyCalculator, MCMCParams, MCMCSimulation, MCMCResults, Walker, BranchingResult, VmcWalker, JastrowOptimizer, OptimizationResult, SamplingStats};
 pub use io::{read_h2molecule_vb, read_h2molecule_mo};
 
 #[cfg(test)]
