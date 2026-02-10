@@ -202,8 +202,11 @@ impl JastrowOptimizer {
     }
     
     /// Optimize Jastrow parameters for the given wavefunction.
+    /// 
+    /// Uses a two-phase approach:
+    /// 1. Grid search to find approximate optimum
+    /// 2. Local refinement with gradient descent
     pub fn optimize(&self, wfn: &MethaneGTO) -> OptimizationResult {
-        let mut current_wfn = wfn.clone();
         let mut energy_history = Vec::new();
         let mut variance_history = Vec::new();
         
@@ -211,12 +214,51 @@ impl JastrowOptimizer {
             println!("Starting Jastrow optimization...");
             println!("Initial parameters: b_ee={:.4}, b_en={:.4}",
                 wfn.get_jastrow_params().b_ee, wfn.get_jastrow_params().b_en);
+            println!("\nPhase 1: Grid Search");
         }
         
-        let mut prev_variance = f64::MAX;
+        // Phase 1: Grid search to find good starting point
+        let b_ee_values = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
+        let b_en_values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
         
-        for iter in 0..self.max_iterations {
-            // Sample current wavefunction
+        let mut best_params = wfn.get_jastrow_params();
+        let mut best_variance = f64::MAX;
+        let mut best_energy = 0.0;
+        
+        for &b_ee in &b_ee_values {
+            for &b_en in &b_en_values {
+                let params = JastrowParams { b_ee, b_en };
+                let test_wfn = wfn.with_jastrow_params(params);
+                let stats = self.sample(&test_wfn);
+                
+                if self.verbose {
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} ± {:.4}, σ²={:.2}",
+                        b_ee, b_en, stats.energy, stats.error, stats.variance);
+                }
+                
+                if stats.variance < best_variance {
+                    best_variance = stats.variance;
+                    best_params = params;
+                    best_energy = stats.energy;
+                }
+            }
+        }
+        
+        if self.verbose {
+            println!("\nBest from grid: b_ee={:.4}, b_en={:.4}, σ²={:.4}",
+                best_params.b_ee, best_params.b_en, best_variance);
+            println!("\nPhase 2: Local Refinement");
+        }
+        
+        // Phase 2: Local refinement around best point
+        let mut current_wfn = wfn.with_jastrow_params(best_params);
+        let mut prev_variance = best_variance;
+        
+        // Use smaller learning rate for refinement
+        let refine_lr = self.learning_rate * 0.5;
+        let refine_steps = (self.max_iterations / 3).max(5);
+        
+        for iter in 0..refine_steps {
             let stats = self.sample(&current_wfn);
             energy_history.push(stats.energy);
             variance_history.push(stats.variance);
@@ -228,31 +270,51 @@ impl JastrowOptimizer {
             }
             
             // Check convergence
-            let variance_change = (prev_variance - stats.variance).abs() / prev_variance.abs();
-            if variance_change < self.tolerance && iter > 5 {
+            let variance_change = (prev_variance - stats.variance).abs() / prev_variance.abs().max(1.0);
+            if variance_change < self.tolerance && iter > 3 {
                 if self.verbose {
-                    println!("Converged after {} iterations", iter + 1);
+                    println!("Converged after {} refinement iterations", iter + 1);
                 }
                 break;
             }
             prev_variance = stats.variance;
             
-            // Compute gradient
-            let (grad_b_ee, grad_b_en) = self.compute_gradient(&current_wfn, stats.variance);
+            // Compute gradient with averaged sampling (more stable)
+            let params = current_wfn.get_jastrow_params();
+            let h = self.fd_step * 0.5;  // Smaller step for refinement
             
-            // Update parameters with gradient descent
-            let mut params = current_wfn.get_jastrow_params();
-            params.b_ee -= self.learning_rate * grad_b_ee;
-            params.b_en -= self.learning_rate * grad_b_en;
+            // Gradient w.r.t. b_ee (average of two samples)
+            let params_plus = JastrowParams { b_ee: params.b_ee + h, b_en: params.b_en };
+            let params_minus = JastrowParams { b_ee: params.b_ee - h, b_en: params.b_en };
+            let var_plus = self.sample(&wfn.with_jastrow_params(params_plus)).variance;
+            let var_minus = self.sample(&wfn.with_jastrow_params(params_minus)).variance;
+            let grad_b_ee = (var_plus - var_minus) / (2.0 * h);
+            
+            // Gradient w.r.t. b_en
+            let params_plus = JastrowParams { b_ee: params.b_ee, b_en: params.b_en + h };
+            let params_minus = JastrowParams { b_ee: params.b_ee, b_en: params.b_en - h };
+            let var_plus = self.sample(&wfn.with_jastrow_params(params_plus)).variance;
+            let var_minus = self.sample(&wfn.with_jastrow_params(params_minus)).variance;
+            let grad_b_en = (var_plus - var_minus) / (2.0 * h);
+            
+            // Clip gradients to prevent wild jumps
+            let max_grad = 50.0;
+            let grad_b_ee = grad_b_ee.clamp(-max_grad, max_grad);
+            let grad_b_en = grad_b_en.clamp(-max_grad, max_grad);
+            
+            // Update parameters
+            let mut new_params = params;
+            new_params.b_ee -= refine_lr * grad_b_ee;
+            new_params.b_en -= refine_lr * grad_b_en;
             
             // Clamp to reasonable values
-            params.b_ee = params.b_ee.clamp(0.1, 10.0);
-            params.b_en = params.b_en.clamp(0.1, 10.0);
+            new_params.b_ee = new_params.b_ee.clamp(0.3, 8.0);
+            new_params.b_en = new_params.b_en.clamp(0.5, 8.0);
             
-            current_wfn.set_jastrow_params(params);
+            current_wfn.set_jastrow_params(new_params);
         }
         
-        // Final sampling with more samples
+        // Final sampling with more samples for accurate estimate
         let final_stats = self.sample(&current_wfn);
         
         OptimizationResult {
