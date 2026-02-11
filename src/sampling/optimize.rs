@@ -204,8 +204,8 @@ impl JastrowOptimizer {
     /// Optimize Jastrow parameters for the given wavefunction.
     /// 
     /// Uses a two-phase approach:
-    /// 1. Grid search to find approximate optimum
-    /// 2. Local refinement with gradient descent
+    /// 1. Coarse grid search over parameter space
+    /// 2. Fine grid search around the best point
     pub fn optimize(&self, wfn: &MethaneGTO) -> OptimizationResult {
         let mut energy_history = Vec::new();
         let mut variance_history = Vec::new();
@@ -214,10 +214,10 @@ impl JastrowOptimizer {
             println!("Starting Jastrow optimization...");
             println!("Initial parameters: b_ee={:.4}, b_en={:.4}",
                 wfn.get_jastrow_params().b_ee, wfn.get_jastrow_params().b_en);
-            println!("\nPhase 1: Grid Search");
+            println!("\nPhase 1: Coarse Grid Search");
         }
         
-        // Phase 1: Grid search to find good starting point
+        // Phase 1: Coarse grid search
         let b_ee_values = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
         let b_en_values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
         
@@ -230,6 +230,9 @@ impl JastrowOptimizer {
                 let params = JastrowParams { b_ee, b_en };
                 let test_wfn = wfn.with_jastrow_params(params);
                 let stats = self.sample(&test_wfn);
+                
+                energy_history.push(stats.energy);
+                variance_history.push(stats.variance);
                 
                 if self.verbose {
                     println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} ± {:.4}, σ²={:.2}",
@@ -245,80 +248,53 @@ impl JastrowOptimizer {
         }
         
         if self.verbose {
-            println!("\nBest from grid: b_ee={:.4}, b_en={:.4}, σ²={:.4}",
-                best_params.b_ee, best_params.b_en, best_variance);
-            println!("\nPhase 2: Local Refinement");
+            println!("\nBest from coarse grid: b_ee={:.4}, b_en={:.4}, E={:.4}, σ²={:.4}",
+                best_params.b_ee, best_params.b_en, best_energy, best_variance);
+            println!("\nPhase 2: Fine Grid Search");
         }
         
-        // Phase 2: Local refinement around best point
-        let mut current_wfn = wfn.with_jastrow_params(best_params);
-        let mut prev_variance = best_variance;
+        // Phase 2: Fine grid search around the best point
+        let step = 0.25;
+        let fine_b_ee: Vec<f64> = (-3..=3)
+            .map(|i| (best_params.b_ee + i as f64 * step).max(0.25))
+            .collect();
+        let fine_b_en: Vec<f64> = (-3..=3)
+            .map(|i| (best_params.b_en + i as f64 * step).max(0.5))
+            .collect();
         
-        // Use smaller learning rate for refinement
-        let refine_lr = self.learning_rate * 0.5;
-        let refine_steps = (self.max_iterations / 3).max(5);
-        
-        for iter in 0..refine_steps {
-            let stats = self.sample(&current_wfn);
-            energy_history.push(stats.energy);
-            variance_history.push(stats.variance);
-            
-            if self.verbose {
-                let params = current_wfn.get_jastrow_params();
-                println!("Iter {:3}: E = {:8.4} ± {:.4}, σ² = {:8.4}, b_ee = {:.4}, b_en = {:.4}",
-                    iter, stats.energy, stats.error, stats.variance, params.b_ee, params.b_en);
-            }
-            
-            // Check convergence
-            let variance_change = (prev_variance - stats.variance).abs() / prev_variance.abs().max(1.0);
-            if variance_change < self.tolerance && iter > 3 {
+        for &b_ee in &fine_b_ee {
+            for &b_en in &fine_b_en {
+                let params = JastrowParams { b_ee, b_en };
+                let test_wfn = wfn.with_jastrow_params(params);
+                let stats = self.sample(&test_wfn);
+                
+                energy_history.push(stats.energy);
+                variance_history.push(stats.variance);
+                
                 if self.verbose {
-                    println!("Converged after {} refinement iterations", iter + 1);
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} ± {:.4}, σ²={:.2}",
+                        b_ee, b_en, stats.energy, stats.error, stats.variance);
                 }
-                break;
+                
+                if stats.variance < best_variance {
+                    best_variance = stats.variance;
+                    best_params = params;
+                    best_energy = stats.energy;
+                }
             }
-            prev_variance = stats.variance;
-            
-            // Compute gradient with averaged sampling (more stable)
-            let params = current_wfn.get_jastrow_params();
-            let h = self.fd_step * 0.5;  // Smaller step for refinement
-            
-            // Gradient w.r.t. b_ee (average of two samples)
-            let params_plus = JastrowParams { b_ee: params.b_ee + h, b_en: params.b_en };
-            let params_minus = JastrowParams { b_ee: params.b_ee - h, b_en: params.b_en };
-            let var_plus = self.sample(&wfn.with_jastrow_params(params_plus)).variance;
-            let var_minus = self.sample(&wfn.with_jastrow_params(params_minus)).variance;
-            let grad_b_ee = (var_plus - var_minus) / (2.0 * h);
-            
-            // Gradient w.r.t. b_en
-            let params_plus = JastrowParams { b_ee: params.b_ee, b_en: params.b_en + h };
-            let params_minus = JastrowParams { b_ee: params.b_ee, b_en: params.b_en - h };
-            let var_plus = self.sample(&wfn.with_jastrow_params(params_plus)).variance;
-            let var_minus = self.sample(&wfn.with_jastrow_params(params_minus)).variance;
-            let grad_b_en = (var_plus - var_minus) / (2.0 * h);
-            
-            // Clip gradients to prevent wild jumps
-            let max_grad = 50.0;
-            let grad_b_ee = grad_b_ee.clamp(-max_grad, max_grad);
-            let grad_b_en = grad_b_en.clamp(-max_grad, max_grad);
-            
-            // Update parameters
-            let mut new_params = params;
-            new_params.b_ee -= refine_lr * grad_b_ee;
-            new_params.b_en -= refine_lr * grad_b_en;
-            
-            // Clamp to reasonable values
-            new_params.b_ee = new_params.b_ee.clamp(0.3, 8.0);
-            new_params.b_en = new_params.b_en.clamp(0.5, 8.0);
-            
-            current_wfn.set_jastrow_params(new_params);
         }
         
-        // Final sampling with more samples for accurate estimate
-        let final_stats = self.sample(&current_wfn);
+        if self.verbose {
+            println!("\nBest from fine grid: b_ee={:.4}, b_en={:.4}, E={:.4}, σ²={:.4}",
+                best_params.b_ee, best_params.b_en, best_energy, best_variance);
+        }
+        
+        // Final sampling with optimized params and more samples for accuracy
+        let final_wfn = wfn.with_jastrow_params(best_params);
+        let final_stats = self.sample(&final_wfn);
         
         OptimizationResult {
-            params: current_wfn.get_jastrow_params(),
+            params: best_params,
             final_energy: final_stats.energy,
             final_variance: final_stats.variance,
             energy_history,
