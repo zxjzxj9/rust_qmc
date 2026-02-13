@@ -8,7 +8,8 @@ mod pimc_fermion;
 mod optimize;
 
 pub use traits::{EnergyCalculator, Walker, BranchingResult, VmcWalker};
-pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation};
+pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
+              DDVMCParams, DDVMCResults, DriftDiffusionVMC};
 pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
 pub use dmc::{run_dmc_sampling, HarmonicWalker, HydrogenAtomWalker, HydrogenMoleculeWalker};
 pub use pimc::{
