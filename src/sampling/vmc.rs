@@ -432,14 +432,18 @@ impl<T: MultiWfn + EnergyCalculator> DriftDiffusionVMC<T> {
 
         // Production phase
         let mut energies = Vec::with_capacity(self.params.n_steps);
-        total_accepted = 0;
-        total_moves = 0;
+        let mut prod_accepted: usize = 0;
+        let mut prod_moves: usize = 0;
+        let mut window_accepted: usize = 0;
+        let mut window_moves: usize = 0;
 
         for step in 0..self.params.n_steps {
             for state in states.iter_mut() {
                 let acc = self.sweep(state);
-                total_accepted += acc;
-                total_moves += n_elec;
+                prod_accepted += acc;
+                prod_moves += n_elec;
+                window_accepted += acc;
+                window_moves += n_elec;
             }
 
             // Record mean energy across walkers
@@ -449,16 +453,16 @@ impl<T: MultiWfn + EnergyCalculator> DriftDiffusionVMC<T> {
             energies.push(mean_energy);
 
             // Continue adapting (gently) during production
-            if (step + 1) % self.params.adaptation_interval == 0 && total_moves > 0 {
-                let rate = total_accepted as f64 / total_moves as f64;
+            if (step + 1) % self.params.adaptation_interval == 0 && window_moves > 0 {
+                let rate = window_accepted as f64 / window_moves as f64;
                 self.adapt_time_step(rate);
-                total_accepted = 0;
-                total_moves = 0;
+                window_accepted = 0;
+                window_moves = 0;
             }
         }
 
-        let acceptance_rate = if total_moves > 0 {
-            total_accepted as f64 / total_moves as f64
+        let acceptance_rate = if prod_moves > 0 {
+            prod_accepted as f64 / prod_moves as f64
         } else {
             0.0
         };
