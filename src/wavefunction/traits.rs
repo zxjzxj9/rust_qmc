@@ -89,3 +89,27 @@ pub trait MultiWfn {
         laplacian
     }
 }
+
+/// Trait for wavefunctions with optimizable variational parameters.
+///
+/// Used by Stochastic Reconfiguration and other optimization methods.
+/// Provides access to parameter log-derivatives O_i = ∂ ln|Ψ(R)| / ∂p_i,
+/// which are the fundamental quantities needed for gradient-based optimization.
+pub trait OptimizableWfn: MultiWfn {
+    /// Number of variational parameters.
+    fn num_params(&self) -> usize;
+
+    /// Get current parameter values.
+    fn get_params(&self) -> Vec<f64>;
+
+    /// Set parameter values.
+    fn set_params(&mut self, params: &[f64]);
+
+    /// Compute O_i = ∂ ln|Ψ(R)| / ∂p_i for all parameters.
+    ///
+    /// These log-derivatives are the key quantities for Stochastic
+    /// Reconfiguration. For a Slater-Jastrow wavefunction Ψ = D × J
+    /// where only the Jastrow depends on parameters:
+    ///   O_i = ∂ ln|J| / ∂p_i = ∂u / ∂p_i
+    fn log_derivatives(&self, r: &[Vector3<f64>]) -> Vec<f64>;
+}

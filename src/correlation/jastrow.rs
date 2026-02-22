@@ -290,6 +290,44 @@ impl Jastrow3 {
         }
         lap
     }
+    
+    /// Derivative of ln J with respect to b_ee parameter.
+    ///
+    /// ∂(u_ee)/∂b_ee = Σ_{i<j} -a_σ r²_ij / (1 + b_ee r_ij)²
+    pub fn d_ln_j_d_bee(&self, r: &[Vector3<f64>]) -> f64 {
+        let mut sum = 0.0;
+        for i in 0..self.num_electrons {
+            for j in (i + 1)..self.num_electrons {
+                let r_ij = (r[i] - r[j]).norm();
+                let a = if self.spins[i] == self.spins[j] {
+                    self.a_ee_para
+                } else {
+                    self.a_ee_anti
+                };
+                let denom = 1.0 + self.b_ee * r_ij;
+                // d/d(b_ee) [a * r_ij / (1 + b_ee * r_ij)] = -a * r_ij^2 / (1 + b_ee * r_ij)^2
+                sum += -a * r_ij * r_ij / (denom * denom);
+            }
+        }
+        sum
+    }
+    
+    /// Derivative of ln J with respect to b_en parameter.
+    ///
+    /// ∂(u_en)/∂b_en = Σ_{i,I} Z_I r²_iI / (1 + b_en r_iI)²
+    pub fn d_ln_j_d_ben(&self, r: &[Vector3<f64>]) -> f64 {
+        let mut sum = 0.0;
+        for i in 0..self.num_electrons {
+            for (n, nuc) in self.nuclei.iter().enumerate() {
+                let r_in = (r[i] - nuc).norm();
+                let a_en = self.charges[n];
+                let denom = 1.0 + self.b_en * r_in;
+                // d/d(b_en) [-a_en * r_in / (1 + b_en * r_in)] = a_en * r_in^2 / (1 + b_en * r_in)^2
+                sum += a_en * r_in * r_in / (denom * denom);
+            }
+        }
+        sum
+    }
 }
 
 impl MultiWfn for Jastrow3 {

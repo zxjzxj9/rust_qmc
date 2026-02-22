@@ -925,6 +925,36 @@ impl EnergyCalculator for MethaneGTO {
     }
 }
 
+use crate::wavefunction::OptimizableWfn;
+
+impl OptimizableWfn for MethaneGTO {
+    fn num_params(&self) -> usize {
+        2
+    }
+    
+    fn get_params(&self) -> Vec<f64> {
+        vec![self.jastrow.b_ee, self.jastrow.b_en]
+    }
+    
+    fn set_params(&mut self, params: &[f64]) {
+        assert_eq!(params.len(), 2, "MethaneGTO has exactly 2 Jastrow parameters");
+        self.jastrow.b_ee = params[0];
+        self.jastrow.b_en = params[1];
+    }
+    
+    /// Compute O_i = ∂ ln|Ψ| / ∂p_i.
+    ///
+    /// Since Ψ = D × J and D doesn't depend on Jastrow parameters:
+    ///   ∂ ln|Ψ| / ∂p = ∂ ln|J| / ∂p = ∂u / ∂p
+    fn log_derivatives(&self, r: &[Vector3<f64>]) -> Vec<f64> {
+        vec![
+            self.jastrow.d_ln_j_d_bee(r),
+            self.jastrow.d_ln_j_d_ben(r),
+        ]
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -982,6 +1012,42 @@ mod tests {
             assert!(diff / scale < 0.2,
                 "Laplacian mismatch at electron {}: analytical={}, numerical={}",
                 i, analytical_lap[i], numerical_lap[i]);
+        }
+    }
+    
+    #[test]
+    fn test_methanegto_log_derivatives() {
+        use crate::wavefunction::OptimizableWfn;
+        
+        let wfn = MethaneGTO::new(2.0, 3.0);
+        let positions = wfn.initialize();
+        
+        let analytical = wfn.log_derivatives(&positions);
+        
+        // Finite difference verification
+        let dp = 1e-5;
+        let params = wfn.get_params();
+        
+        for k in 0..2 {
+            let mut p_plus = params.clone();
+            let mut p_minus = params.clone();
+            p_plus[k] += dp;
+            p_minus[k] -= dp;
+            
+            let mut wfn_plus = wfn.clone();
+            wfn_plus.set_params(&p_plus);
+            let mut wfn_minus = wfn.clone();
+            wfn_minus.set_params(&p_minus);
+            
+            let ln_psi_plus = wfn_plus.evaluate(&positions).abs().ln();
+            let ln_psi_minus = wfn_minus.evaluate(&positions).abs().ln();
+            let numerical = (ln_psi_plus - ln_psi_minus) / (2.0 * dp);
+            
+            let diff = (analytical[k] - numerical).abs();
+            let scale = analytical[k].abs().max(1e-6);
+            assert!(diff / scale < 0.01,
+                "Log-derivative mismatch for param {}: analytical={}, numerical={}, diff={}",
+                k, analytical[k], numerical, diff);
         }
     }
 }
