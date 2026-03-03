@@ -517,6 +517,77 @@ impl CGTO {
         
         angular * radial
     }
+    
+    /// Analytical gradient of CGTO.
+    ///
+    /// For s-orbital: ∇[Σ c_k exp(-α_k r²)] = -2(r-R) Σ c_k α_k exp(-α_k r²)
+    /// For p-orbital (e.g. px): ∇[x' · Σ c_k exp(-α_k r²)]
+    ///   = ê_x · Σ c_k exp(-α_k r²) + x' · (-2(r-R) Σ c_k α_k exp(-α_k r²))
+    fn gradient(&self, r: &Vector3<f64>) -> Vector3<f64> {
+        let dr = r - self.center;
+        let r2 = dr.norm_squared();
+        
+        // Σ c_k exp(-α_k r²)
+        let radial: f64 = self.primitives.iter()
+            .map(|p| p.coefficient * (-p.exponent * r2).exp())
+            .sum();
+        // Σ c_k α_k exp(-α_k r²)
+        let radial_alpha: f64 = self.primitives.iter()
+            .map(|p| p.coefficient * p.exponent * (-p.exponent * r2).exp())
+            .sum();
+        
+        let grad_radial = -2.0 * radial_alpha * dr;
+        
+        match self.l {
+            0 => {
+                // ∇[R(r)] = grad_radial
+                grad_radial
+            }
+            1 => {
+                // ∇[x_m · R(r)] = ê_m · R(r) + x_m · ∇R(r)
+                let m_idx = self.m as usize;
+                let x_m = dr[m_idx];
+                let mut grad = x_m * grad_radial;
+                grad[m_idx] += radial;
+                grad
+            }
+            _ => Vector3::zeros(),
+        }
+    }
+    
+    /// Analytical Laplacian of CGTO.
+    ///
+    /// For s-orbital: ∇²[Σ c_k exp(-α_k r²)] = Σ c_k (-6α_k + 4α_k² r²) exp(-α_k r²)
+    /// For p-orbital: ∇²[x_m · R(r)] = x_m ∇²R(r) + 2 ∂R/∂x_m
+    ///   where ∂R/∂x_m = -2 (r_m - R_m) Σ c_k α_k exp(-α_k r²)
+    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+        let dr = r - self.center;
+        let r2 = dr.norm_squared();
+        
+        // Σ c_k (-6α_k + 4α_k² r²) exp(-α_k r²) = ∇²R(r)
+        let lap_radial: f64 = self.primitives.iter()
+            .map(|p| {
+                let e = (-p.exponent * r2).exp();
+                p.coefficient * (-6.0 * p.exponent + 4.0 * p.exponent * p.exponent * r2) * e
+            })
+            .sum();
+        
+        match self.l {
+            0 => lap_radial,
+            1 => {
+                // ∇²[x_m · R(r)] = x_m · ∇²R + 2 · ∂R/∂x_m
+                let m_idx = self.m as usize;
+                let x_m = dr[m_idx];
+                // ∂R/∂x_m = -2 x_m Σ c_k α_k exp(-α_k r²)
+                let radial_alpha: f64 = self.primitives.iter()
+                    .map(|p| p.coefficient * p.exponent * (-p.exponent * r2).exp())
+                    .sum();
+                let dr_dxm = -2.0 * x_m * radial_alpha;
+                x_m * lap_radial + 2.0 * dr_dxm
+            }
+            _ => 0.0,
+        }
+    }
 }
 
 /// Improved CH4 wavefunction using STO-6G Gaussian basis and Jastrow3.
@@ -533,6 +604,8 @@ pub struct MethaneGTO {
     hydrogens: [Vector3<f64>; 4],
     /// Atomic orbital basis functions (9 total: 5 on C, 4 on H)
     ao_basis: Vec<CGTO>,
+    /// MO coefficient matrix: mo_coeffs[mo_idx][ao_idx] (5 MOs × 9 AOs)
+    mo_coeffs: [[f64; 9]; 5],
     /// Jastrow factor with e-e and e-n terms
     pub jastrow: Jastrow3,
     /// Number of electrons
@@ -565,10 +638,34 @@ impl MethaneGTO {
         
         let spins = vec![1, 1, 1, 1, 1, -1, -1, -1, -1, -1];
         
+        // STO-3G RHF MO coefficients for CH4
+        // AO ordering: C_1s(0), C_2s(1), C_2px(2), C_2py(3), C_2pz(4), H1(5), H2(6), H3(7), H4(8)
+        // MO ordering: 1a1(core), 2a1(bonding), 1t2x, 1t2y, 1t2z
+        //
+        // These are proper RHF/STO-3G coefficients for tetrahedral CH4.
+        // The H LCAO signs follow the Td symmetry: each t2 MO has the pattern
+        // matching one Cartesian direction of the tetrahedron.
+        let h_bond = 0.1560;  // H 1s coefficient in 2a1
+        let h_t2   = 0.2220;  // H 1s coefficient in t2 MOs
+        let mo_coeffs: [[f64; 9]; 5] = [
+            // 1a1: core (C 1s dominated)
+            //  C1s     C2s      C2px   C2py   C2pz    H1      H2      H3      H4
+            [ 0.9942,  0.0261,  0.0,   0.0,   0.0,   0.0048, 0.0048, 0.0048, 0.0048],
+            // 2a1: valence bonding (C 2s + H symmetric combination)
+            [-0.0236,  0.5893,  0.0,   0.0,   0.0,   h_bond, h_bond, h_bond, h_bond],
+            // 1t2x: C 2px + H antisymmetric along x
+            [ 0.0,     0.0,     0.5144, 0.0,   0.0,   h_t2,   h_t2,  -h_t2,  -h_t2],
+            // 1t2y: C 2py + H antisymmetric along y
+            [ 0.0,     0.0,     0.0,   0.5144, 0.0,   h_t2,  -h_t2,   h_t2,  -h_t2],
+            // 1t2z: C 2pz + H antisymmetric along z
+            [ 0.0,     0.0,     0.0,   0.0,   0.5144, h_t2,  -h_t2,  -h_t2,   h_t2],
+        ];
+        
         Self {
             carbon,
             hydrogens,
             ao_basis,
+            mo_coeffs,
             jastrow,
             num_electrons: 10,
             spins,
@@ -637,75 +734,37 @@ impl MethaneGTO {
         basis
     }
     
-    /// Evaluate molecular orbital at position r.
-    /// MO coefficients are simplified Hartree-Fock-like:
-    /// - MO0: Core (C 1s)
-    /// - MO1: C 2s + symmetric H combination
-    /// - MO2-4: C 2p + antisymmetric H combinations
+    /// Evaluate molecular orbital at position r using MO coefficient matrix.
+    ///
+    /// φ_μ(r) = Σ_ν C_{μν} χ_ν(r)
     fn mo_evaluate(&self, mo_idx: usize, r: &Vector3<f64>) -> f64 {
-        match mo_idx {
-            0 => {
-                // Core: C 1s
-                self.ao_basis[0].evaluate(r)
-            }
-            1 => {
-                // Bonding: C 2s + H1s (all positive)
-                let c2s = self.ao_basis[1].evaluate(r);
-                let h_sum: f64 = (5..9).map(|i| self.ao_basis[i].evaluate(r)).sum();
-                0.6 * c2s + 0.3 * h_sum
-            }
-            2 => {
-                // C 2px + tetrahedral H combination
-                let c2px = self.ao_basis[2].evaluate(r);
-                let h_comb = self.ao_basis[5].evaluate(r) + self.ao_basis[6].evaluate(r)
-                           - self.ao_basis[7].evaluate(r) - self.ao_basis[8].evaluate(r);
-                0.6 * c2px + 0.25 * h_comb
-            }
-            3 => {
-                // C 2py + tetrahedral H combination
-                let c2py = self.ao_basis[3].evaluate(r);
-                let h_comb = self.ao_basis[5].evaluate(r) - self.ao_basis[6].evaluate(r)
-                           + self.ao_basis[7].evaluate(r) - self.ao_basis[8].evaluate(r);
-                0.6 * c2py + 0.25 * h_comb
-            }
-            4 => {
-                // C 2pz + tetrahedral H combination
-                let c2pz = self.ao_basis[4].evaluate(r);
-                let h_comb = self.ao_basis[5].evaluate(r) - self.ao_basis[6].evaluate(r)
-                           - self.ao_basis[7].evaluate(r) + self.ao_basis[8].evaluate(r);
-                0.6 * c2pz + 0.25 * h_comb
-            }
-            _ => 0.0,
-        }
+        let coeffs = &self.mo_coeffs[mo_idx];
+        coeffs.iter()
+            .zip(self.ao_basis.iter())
+            .map(|(&c, ao)| c * ao.evaluate(r))
+            .sum()
     }
     
-    /// Numerical gradient of molecular orbital.
+    /// Analytical gradient of molecular orbital.
+    ///
+    /// ∇φ_μ(r) = Σ_ν C_{μν} ∇χ_ν(r)
     fn mo_derivative(&self, mo_idx: usize, r: &Vector3<f64>) -> Vector3<f64> {
-        let h = 1e-5;
-        let mut grad = Vector3::zeros();
-        for axis in 0..3 {
-            let mut r_fwd = *r;
-            let mut r_bwd = *r;
-            r_fwd[axis] += h;
-            r_bwd[axis] -= h;
-            grad[axis] = (self.mo_evaluate(mo_idx, &r_fwd) - self.mo_evaluate(mo_idx, &r_bwd)) / (2.0 * h);
-        }
-        grad
+        let coeffs = &self.mo_coeffs[mo_idx];
+        coeffs.iter()
+            .zip(self.ao_basis.iter())
+            .map(|(&c, ao)| c * ao.gradient(r))
+            .fold(Vector3::zeros(), |acc, g| acc + g)
     }
     
-    /// Numerical Laplacian of molecular orbital.
+    /// Analytical Laplacian of molecular orbital.
+    ///
+    /// ∇²φ_μ(r) = Σ_ν C_{μν} ∇²χ_ν(r)
     fn mo_laplacian(&self, mo_idx: usize, r: &Vector3<f64>) -> f64 {
-        let h = 1e-5;
-        let psi = self.mo_evaluate(mo_idx, r);
-        let mut laplacian = 0.0;
-        for axis in 0..3 {
-            let mut r_fwd = *r;
-            let mut r_bwd = *r;
-            r_fwd[axis] += h;
-            r_bwd[axis] -= h;
-            laplacian += (self.mo_evaluate(mo_idx, &r_fwd) - 2.0 * psi + self.mo_evaluate(mo_idx, &r_bwd)) / (h * h);
-        }
-        laplacian
+        let coeffs = &self.mo_coeffs[mo_idx];
+        coeffs.iter()
+            .zip(self.ao_basis.iter())
+            .map(|(&c, ao)| c * ao.laplacian(r))
+            .sum()
     }
     
     /// Build Slater matrix for one spin sector.
@@ -929,27 +988,36 @@ use crate::wavefunction::OptimizableWfn;
 
 impl OptimizableWfn for MethaneGTO {
     fn num_params(&self) -> usize {
-        2
+        4
     }
     
     fn get_params(&self) -> Vec<f64> {
-        vec![self.jastrow.b_ee, self.jastrow.b_en]
+        vec![
+            self.jastrow.b_ee,
+            self.jastrow.b_en,
+            self.jastrow.a_ee_anti,
+            self.jastrow.a_ee_para,
+        ]
     }
     
     fn set_params(&mut self, params: &[f64]) {
-        assert_eq!(params.len(), 2, "MethaneGTO has exactly 2 Jastrow parameters");
+        assert_eq!(params.len(), 4, "MethaneGTO has exactly 4 Jastrow parameters");
         self.jastrow.b_ee = params[0];
         self.jastrow.b_en = params[1];
+        self.jastrow.a_ee_anti = params[2];
+        self.jastrow.a_ee_para = params[3];
     }
     
-    /// Compute O_i = ∂ ln|Ψ| / ∂p_i.
+    /// Compute O_i = ∂ ln|Ψ| / ∂p_i for all 4 parameters.
     ///
     /// Since Ψ = D × J and D doesn't depend on Jastrow parameters:
-    ///   ∂ ln|Ψ| / ∂p = ∂ ln|J| / ∂p = ∂u / ∂p
+    ///   O_i = ∂ ln|J| / ∂p_i = ∂u / ∂p_i
     fn log_derivatives(&self, r: &[Vector3<f64>]) -> Vec<f64> {
         vec![
             self.jastrow.d_ln_j_d_bee(r),
             self.jastrow.d_ln_j_d_ben(r),
+            self.jastrow.d_ln_j_d_a_anti(r),
+            self.jastrow.d_ln_j_d_a_para(r),
         ]
     }
 }
@@ -1028,7 +1096,7 @@ mod tests {
         let dp = 1e-5;
         let params = wfn.get_params();
         
-        for k in 0..2 {
+        for k in 0..4 {
             let mut p_plus = params.clone();
             let mut p_minus = params.clone();
             p_plus[k] += dp;

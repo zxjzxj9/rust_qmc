@@ -45,10 +45,12 @@ fn main() {
     println!("---------------------");
     println!("  Iterations:      {}", result.energy_history.len());
     println!();
-    println!("  Initial params:  b_ee={:.4}, b_en={:.4}",
-        result.param_history[0][0], result.param_history[0][1]);
-    println!("  Final params:    b_ee={:.4}, b_en={:.4}",
-        result.final_params[0], result.final_params[1]);
+    println!("  Initial params:  b_ee={:.4}, b_en={:.4}, a_anti={:.4}, a_para={:.4}",
+        result.param_history[0][0], result.param_history[0][1],
+        result.param_history[0][2], result.param_history[0][3]);
+    println!("  Final params:    b_ee={:.4}, b_en={:.4}, a_anti={:.4}, a_para={:.4}",
+        result.final_params[0], result.final_params[1],
+        result.final_params[2], result.final_params[3]);
     println!();
     println!("  Final energy:    {:.5} Ha ({:.2} eV)", 
         result.final_energy, result.final_energy * HA_TO_EV);

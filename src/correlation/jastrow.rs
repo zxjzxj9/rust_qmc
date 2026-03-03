@@ -328,6 +328,38 @@ impl Jastrow3 {
         }
         sum
     }
+    
+    /// Derivative of ln J with respect to a_ee_anti parameter.
+    ///
+    /// ∂(u_ee)/∂a_anti = Σ_{i<j, antiparallel} r_ij / (1 + b_ee r_ij)
+    pub fn d_ln_j_d_a_anti(&self, r: &[Vector3<f64>]) -> f64 {
+        let mut sum = 0.0;
+        for i in 0..self.num_electrons {
+            for j in (i + 1)..self.num_electrons {
+                if self.spins[i] != self.spins[j] {
+                    let r_ij = (r[i] - r[j]).norm();
+                    sum += r_ij / (1.0 + self.b_ee * r_ij);
+                }
+            }
+        }
+        sum
+    }
+    
+    /// Derivative of ln J with respect to a_ee_para parameter.
+    ///
+    /// ∂(u_ee)/∂a_para = Σ_{i<j, parallel} r_ij / (1 + b_ee r_ij)
+    pub fn d_ln_j_d_a_para(&self, r: &[Vector3<f64>]) -> f64 {
+        let mut sum = 0.0;
+        for i in 0..self.num_electrons {
+            for j in (i + 1)..self.num_electrons {
+                if self.spins[i] == self.spins[j] {
+                    let r_ij = (r[i] - r[j]).norm();
+                    sum += r_ij / (1.0 + self.b_ee * r_ij);
+                }
+            }
+        }
+        sum
+    }
 }
 
 impl MultiWfn for Jastrow3 {
