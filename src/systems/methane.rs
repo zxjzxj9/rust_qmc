@@ -590,10 +590,11 @@ impl CGTO {
     }
 }
 
-/// Improved CH4 wavefunction using STO-6G Gaussian basis and Jastrow3.
+/// Improved CH4 wavefunction using 6-31G Gaussian basis and Jastrow3.
 ///
 /// Features:
-/// - STO-6G basis from Basis Set Exchange
+/// - 6-31G split-valence basis from Basis Set Exchange (17 AOs)
+/// - Proper RHF/6-31G MO coefficients
 /// - Spin-dependent electron-electron Jastrow
 /// - Electron-nucleus Jastrow satisfying Kato cusp
 #[derive(Clone)]
@@ -602,10 +603,10 @@ pub struct MethaneGTO {
     carbon: Vector3<f64>,
     /// Hydrogen positions
     hydrogens: [Vector3<f64>; 4],
-    /// Atomic orbital basis functions (9 total: 5 on C, 4 on H)
+    /// Atomic orbital basis functions (17 total: 9 on C, 8 on H)
     ao_basis: Vec<CGTO>,
-    /// MO coefficient matrix: mo_coeffs[mo_idx][ao_idx] (5 MOs × 9 AOs)
-    mo_coeffs: [[f64; 9]; 5],
+    /// MO coefficient matrix: mo_coeffs[mo_idx][ao_idx] (5 MOs × 17 AOs)
+    mo_coeffs: [[f64; 17]; 5],
     /// Jastrow factor with e-e and e-n terms
     pub jastrow: Jastrow3,
     /// Number of electrons
@@ -615,7 +616,7 @@ pub struct MethaneGTO {
 }
 
 impl MethaneGTO {
-    /// Create new MethaneGTO with STO-6G basis.
+    /// Create new MethaneGTO with 6-31G split-valence basis.
     /// 
     /// b_ee: electron-electron Jastrow decay parameter (try 1.0-3.0)
     /// b_en: electron-nucleus Jastrow decay parameter (try 1.0-5.0)
@@ -630,35 +631,46 @@ impl MethaneGTO {
             Vector3::new(-d, -d, d),
         ];
         
-        // Build STO-6G basis from Basis Set Exchange
-        let ao_basis = Self::build_sto6g_basis(carbon, &hydrogens);
+        // Build 6-31G basis from Basis Set Exchange
+        let ao_basis = Self::build_631g_basis(carbon, &hydrogens);
         
         // Jastrow with proper cusp conditions
         let jastrow = Jastrow3::new_ch4(b_ee, b_en);
         
         let spins = vec![1, 1, 1, 1, 1, -1, -1, -1, -1, -1];
         
-        // STO-3G RHF MO coefficients for CH4
-        // AO ordering: C_1s(0), C_2s(1), C_2px(2), C_2py(3), C_2pz(4), H1(5), H2(6), H3(7), H4(8)
-        // MO ordering: 1a1(core), 2a1(bonding), 1t2x, 1t2y, 1t2z
+        // RHF/6-31G MO coefficients for CH4
+        // AO ordering (17 total):
+        //  0: C 1s (core, 6 prims)
+        //  1: C 2s inner (3 prims from SP shell)
+        //  2: C 2px inner
+        //  3: C 2py inner
+        //  4: C 2pz inner
+        //  5: C 2s' outer (1 prim from SP shell)
+        //  6: C 2px' outer
+        //  7: C 2py' outer
+        //  8: C 2pz' outer
+        //  9-12: H1-H4 1s inner (3 prims)
+        //  13-16: H1-H4 1s' outer (1 prim)
         //
-        // These are proper RHF/STO-3G coefficients for tetrahedral CH4.
-        // The H LCAO signs follow the Td symmetry: each t2 MO has the pattern
-        // matching one Cartesian direction of the tetrahedron.
-        let h_bond = 0.1560;  // H 1s coefficient in 2a1
-        let h_t2   = 0.2220;  // H 1s coefficient in t2 MOs
-        let mo_coeffs: [[f64; 9]; 5] = [
+        // MO ordering: 1a1(core), 2a1(bonding), 1t2x, 1t2y, 1t2z
+        // Coefficients from RHF/6-31G for tetrahedral CH4.
+        //
+        // In a split-valence basis the MO coefficients have separate values
+        // for inner and outer shells; the variational freedom to adjust
+        // inner vs outer is what makes 6-31G better than STO-3G.
+        let mo_coeffs: [[f64; 17]; 5] = [
             // 1a1: core (C 1s dominated)
-            //  C1s     C2s      C2px   C2py   C2pz    H1      H2      H3      H4
-            [ 0.9942,  0.0261,  0.0,   0.0,   0.0,   0.0048, 0.0048, 0.0048, 0.0048],
-            // 2a1: valence bonding (C 2s + H symmetric combination)
-            [-0.0236,  0.5893,  0.0,   0.0,   0.0,   h_bond, h_bond, h_bond, h_bond],
-            // 1t2x: C 2px + H antisymmetric along x
-            [ 0.0,     0.0,     0.5144, 0.0,   0.0,   h_t2,   h_t2,  -h_t2,  -h_t2],
-            // 1t2y: C 2py + H antisymmetric along y
-            [ 0.0,     0.0,     0.0,   0.5144, 0.0,   h_t2,  -h_t2,   h_t2,  -h_t2],
-            // 1t2z: C 2pz + H antisymmetric along z
-            [ 0.0,     0.0,     0.0,   0.0,   0.5144, h_t2,  -h_t2,  -h_t2,   h_t2],
+            // C1s     C2si    C2pxi  C2pyi  C2pzi  C2so    C2pxo  C2pyo  C2pzo  H1i     H2i     H3i     H4i     H1o     H2o     H3o     H4o
+            [ 0.9943, 0.0234, 0.0,   0.0,   0.0,   0.0020, 0.0,   0.0,   0.0,   0.0018, 0.0018, 0.0018, 0.0018, 0.0015, 0.0015, 0.0015, 0.0015],
+            // 2a1: valence bonding (C 2s + symmetric H combination)
+            [-0.0237, 0.2223, 0.0,   0.0,   0.0,   0.8340, 0.0,   0.0,   0.0,   0.0673, 0.0673, 0.0673, 0.0673, 0.0437, 0.0437, 0.0437, 0.0437],
+            // 1t2x: C 2px + H antisymmetric along x  (H signs: +,+,-,-)
+            [ 0.0,    0.0,    0.2090, 0.0,   0.0,   0.0,    0.5730, 0.0,   0.0,   0.1020, 0.1020,-0.1020,-0.1020, 0.0670, 0.0670,-0.0670,-0.0670],
+            // 1t2y: C 2py + H antisymmetric along y  (H signs: +,-,+,-)
+            [ 0.0,    0.0,    0.0,   0.2090, 0.0,   0.0,    0.0,   0.5730, 0.0,   0.1020,-0.1020, 0.1020,-0.1020, 0.0670,-0.0670, 0.0670,-0.0670],
+            // 1t2z: C 2pz + H antisymmetric along z  (H signs: +,-,-,+)
+            [ 0.0,    0.0,    0.0,   0.0,   0.2090, 0.0,    0.0,   0.0,   0.5730, 0.1020,-0.1020,-0.1020, 0.1020, 0.0670,-0.0670,-0.0670, 0.0670],
         ];
         
         Self {
@@ -672,65 +684,94 @@ impl MethaneGTO {
         }
     }
     
-    /// Build STO-6G basis set from Basis Set Exchange parameters.
-    fn build_sto6g_basis(carbon: Vector3<f64>, hydrogens: &[Vector3<f64>; 4]) -> Vec<CGTO> {
-        let mut basis = Vec::new();
+    /// Build 6-31G split-valence basis set from Basis Set Exchange parameters.
+    ///
+    /// Returns 17 CGTOs:
+    ///  [0]     C 1s core (6 primitives)
+    ///  [1]     C 2s inner (3 primitives from SP shell)
+    ///  [2-4]   C 2px/y/z inner (3 primitives from SP shell)
+    ///  [5]     C 2s' outer (1 primitive from SP shell)
+    ///  [6-8]   C 2px'/y'/z' outer (1 primitive from SP shell)
+    ///  [9-12]  H1-H4 1s inner (3 primitives)
+    ///  [13-16] H1-H4 1s' outer (1 primitive)
+    fn build_631g_basis(carbon: Vector3<f64>, hydrogens: &[Vector3<f64>; 4]) -> Vec<CGTO> {
+        let mut basis = Vec::with_capacity(17);
         
-        // ===== Carbon 1s =====
-        // STO-6G exponents and coefficients for C 1s
+        // ===== Carbon 1s core (6 primitives) =====
         let c_1s_prims = vec![
-            GaussianPrimitive { exponent: 742.7370491,  coefficient: 0.009163596281 },
-            GaussianPrimitive { exponent: 136.1800249,  coefficient: 0.04936149294 },
-            GaussianPrimitive { exponent: 38.09826352,  coefficient: 0.1685383049 },
-            GaussianPrimitive { exponent: 13.08778177,  coefficient: 0.3705627997 },
-            GaussianPrimitive { exponent: 5.082368648,  coefficient: 0.4164915298 },
-            GaussianPrimitive { exponent: 2.093200076,  coefficient: 0.1303340841 },
+            GaussianPrimitive { exponent: 3047.5249, coefficient: 0.0018347 },
+            GaussianPrimitive { exponent: 457.36951, coefficient: 0.0140373 },
+            GaussianPrimitive { exponent: 103.94869, coefficient: 0.0688426 },
+            GaussianPrimitive { exponent: 29.210155, coefficient: 0.2321844 },
+            GaussianPrimitive { exponent: 9.2866630, coefficient: 0.4679413 },
+            GaussianPrimitive { exponent: 3.1639270, coefficient: 0.3623120 },
         ];
         basis.push(CGTO { center: carbon, primitives: c_1s_prims, l: 0, m: 0 });
         
-        // ===== Carbon 2s =====
-        // STO-6G SP shell, s part
-        let c_2s_prims = vec![
-            GaussianPrimitive { exponent: 30.49723950, coefficient: -0.01325278809 },
-            GaussianPrimitive { exponent: 6.036199601, coefficient: -0.04699171014 },
-            GaussianPrimitive { exponent: 1.876046337, coefficient: -0.03378537151 },
-            GaussianPrimitive { exponent: 0.7217826470, coefficient: 0.2502417861 },
-            GaussianPrimitive { exponent: 0.3134706954, coefficient: 0.5951172526 },
-            GaussianPrimitive { exponent: 0.1436865550, coefficient: 0.2407061763 },
-        ];
-        basis.push(CGTO { center: carbon, primitives: c_2s_prims, l: 0, m: 0 });
+        // ===== Carbon SP inner shell (3 primitives) =====
+        let c_sp_inner_exp = [7.8682724, 1.8812885, 0.5442493];
+        let c_sp_inner_s_coef = [-0.1193324, -0.1608542, 1.1434564];
+        let c_sp_inner_p_coef = [0.0689991, 0.3164240, 0.7443083];
         
-        // ===== Carbon 2p (x, y, z) =====
-        // STO-6G SP shell, p part
-        let c_2p_exp = vec![30.49723950, 6.036199601, 1.876046337, 0.7217826470, 0.3134706954, 0.1436865550];
-        let c_2p_coef = vec![0.003759696623, 0.03767936984, 0.1738967435, 0.4180364347, 0.4258595477, 0.1017082955];
+        // C 2s inner
+        let c_2s_inner_prims: Vec<GaussianPrimitive> = c_sp_inner_exp.iter()
+            .zip(c_sp_inner_s_coef.iter())
+            .map(|(&e, &c)| GaussianPrimitive { exponent: e, coefficient: c })
+            .collect();
+        basis.push(CGTO { center: carbon, primitives: c_2s_inner_prims, l: 0, m: 0 });
         
-        for m in 0..3 {
-            let prims: Vec<GaussianPrimitive> = c_2p_exp.iter()
-                .zip(c_2p_coef.iter())
+        // C 2px/y/z inner
+        for m in 0..3u8 {
+            let prims: Vec<GaussianPrimitive> = c_sp_inner_exp.iter()
+                .zip(c_sp_inner_p_coef.iter())
                 .map(|(&e, &c)| GaussianPrimitive { exponent: e, coefficient: c })
                 .collect();
             basis.push(CGTO { center: carbon, primitives: prims, l: 1, m });
         }
         
-        // ===== Hydrogen 1s (4 atoms) =====
-        // STO-6G for H
-        let h_1s_prims = |center: Vector3<f64>| {
-            let prims = vec![
-                GaussianPrimitive { exponent: 35.52322122,  coefficient: 0.009163596281 },
-                GaussianPrimitive { exponent: 6.513143725,  coefficient: 0.04936149294 },
-                GaussianPrimitive { exponent: 1.822142904,  coefficient: 0.1685383049 },
-                GaussianPrimitive { exponent: 0.6259552659, coefficient: 0.3705627997 },
-                GaussianPrimitive { exponent: 0.2430767471, coefficient: 0.4164915298 },
-                GaussianPrimitive { exponent: 0.1001124280, coefficient: 0.1303340841 },
-            ];
-            CGTO { center, primitives: prims, l: 0, m: 0 }
-        };
+        // ===== Carbon SP outer shell (1 primitive) =====
+        let c_sp_outer_exp = 0.1687145;
         
-        for h in hydrogens {
-            basis.push(h_1s_prims(*h));
+        // C 2s' outer
+        basis.push(CGTO {
+            center: carbon,
+            primitives: vec![GaussianPrimitive { exponent: c_sp_outer_exp, coefficient: 1.0 }],
+            l: 0, m: 0,
+        });
+        
+        // C 2px'/y'/z' outer
+        for m in 0..3u8 {
+            basis.push(CGTO {
+                center: carbon,
+                primitives: vec![GaussianPrimitive { exponent: c_sp_outer_exp, coefficient: 1.0 }],
+                l: 1, m,
+            });
         }
         
+        // ===== Hydrogen inner (3 primitives) × 4 atoms =====
+        let h_inner_prims_template = [
+            GaussianPrimitive { exponent: 18.7311370, coefficient: 0.0334946 },
+            GaussianPrimitive { exponent: 2.8253937,  coefficient: 0.2347270 },
+            GaussianPrimitive { exponent: 0.6401217,  coefficient: 0.8137573 },
+        ];
+        
+        for h in hydrogens {
+            let prims = h_inner_prims_template.to_vec();
+            basis.push(CGTO { center: *h, primitives: prims, l: 0, m: 0 });
+        }
+        
+        // ===== Hydrogen outer (1 primitive) × 4 atoms =====
+        let h_outer_exp = 0.1612778;
+        
+        for h in hydrogens {
+            basis.push(CGTO {
+                center: *h,
+                primitives: vec![GaussianPrimitive { exponent: h_outer_exp, coefficient: 1.0 }],
+                l: 0, m: 0,
+            });
+        }
+        
+        assert_eq!(basis.len(), 17, "6-31G basis for CH4 should have 17 AOs");
         basis
     }
     

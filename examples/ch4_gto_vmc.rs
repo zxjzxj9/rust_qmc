@@ -1,7 +1,7 @@
 //! CH4 (Methane) VMC Simulation - Improved Version with STO-6G and Jastrow3
-//!
-//! Uses Gaussian basis with analytical derivatives and electron-nucleus cusp
-//! for better accuracy. Supports drift-diffusion sampling and SR optimization.
+//! Uses 6-31G split-valence Gaussian basis with analytical derivatives and
+//! electron-nucleus Jastrow cusp for better accuracy. Supports drift-diffusion
+//! sampling and SR optimization.
 //!
 //! Usage:
 //!   cargo run --example ch4_gto_vmc --release -- [OPTIONS]
@@ -65,8 +65,8 @@ fn main() {
     println!("========================================");
     println!();
     println!("Features:");
-    println!("  • STO-6G Gaussian basis with analytical derivatives");
-    println!("  • Proper RHF/STO-3G MO coefficients");
+    println!("  • 6-31G split-valence basis (17 AOs) with analytical derivatives");
+    println!("  • Proper RHF/6-31G MO coefficients");
     println!("  • Spin-dependent e-e Jastrow (a=0.5 anti, 0.25 para)");
     println!("  • Electron-nucleus Jastrow with Kato cusp");
     println!("  • 4 optimizable Jastrow parameters (b_ee, b_en, a_anti, a_para)");
@@ -186,7 +186,7 @@ fn print_results(
     println!("Autocorrelation:     {:.2} steps", autocorrelation_time);
     println!();
     println!("Reference Values:");
-    println!("  HF/STO-3G:   ~-39.7 Ha");
+    println!("  HF/6-31G:    ~-40.2 Ha");
     println!("  Experiment:  ~-40.5 Ha (equilibrium)");
     println!();
     
