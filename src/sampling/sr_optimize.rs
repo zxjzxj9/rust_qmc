@@ -293,17 +293,17 @@ impl SROptimizer {
                     delta_params.iter().map(|x| format!("{:.4}", x * self.learning_rate)).collect::<Vec<_>>());
             }
             
-            // Apply parameter update: p_new = p_old + δt * δp
+            // Apply parameter update with per-step clamping to prevent instability
             let mut params = wfn.get_params();
             for (p, dp) in params.iter_mut().zip(delta_params.iter()) {
-                *p += self.learning_rate * dp;
+                // Clamp each step to avoid wild jumps
+                let step = (self.learning_rate * dp).clamp(-0.3, 0.3);
+                *p += step;
             }
             
-            // Enforce positivity of decay parameters
+            // Enforce physically motivated parameter bounds
             for p in params.iter_mut() {
-                if *p < 0.1 {
-                    *p = 0.1;
-                }
+                *p = p.clamp(0.05, 10.0);
             }
             
             wfn.set_params(&params);

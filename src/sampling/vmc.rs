@@ -397,7 +397,7 @@ impl<T: MultiWfn + EnergyCalculator> DriftDiffusionVMC<T> {
         let ratio = acceptance_rate / self.params.target_acceptance;
         // Gentle adjustment to avoid oscillation
         let adjustment = ratio.sqrt().clamp(0.8, 1.2);
-        self.time_step = (self.time_step * adjustment).clamp(0.001, 0.5);
+        self.time_step = (self.time_step * adjustment).clamp(0.001, 0.05);
     }
 
     /// Run the full drift-diffusion VMC simulation.
