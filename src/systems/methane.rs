@@ -478,24 +478,24 @@ impl EnergyCalculator for Methane {
 
 /// STO-6G Gaussian primitive: exp(-alpha * r²)
 #[derive(Clone, Debug)]
-struct GaussianPrimitive {
-    exponent: f64,
-    coefficient: f64,
+pub(crate) struct GaussianPrimitive {
+    pub(crate) exponent: f64,
+    pub(crate) coefficient: f64,
 }
 
 /// Contracted Gaussian-type orbital (CGTO)
 #[derive(Clone, Debug)]
-struct CGTO {
-    center: Vector3<f64>,
-    primitives: Vec<GaussianPrimitive>,
+pub(crate) struct CGTO {
+    pub(crate) center: Vector3<f64>,
+    pub(crate) primitives: Vec<GaussianPrimitive>,
     /// Angular momentum: 0 = s, 1 = p
-    l: u8,
+    pub(crate) l: u8,
     /// For p orbitals: 0 = x, 1 = y, 2 = z
-    m: u8,
+    pub(crate) m: u8,
 }
 
 impl CGTO {
-    fn evaluate(&self, r: &Vector3<f64>) -> f64 {
+    pub(crate) fn evaluate(&self, r: &Vector3<f64>) -> f64 {
         let dr = r - self.center;
         let r2 = dr.norm_squared();
         
@@ -523,7 +523,7 @@ impl CGTO {
     /// For s-orbital: ∇[Σ c_k exp(-α_k r²)] = -2(r-R) Σ c_k α_k exp(-α_k r²)
     /// For p-orbital (e.g. px): ∇[x' · Σ c_k exp(-α_k r²)]
     ///   = ê_x · Σ c_k exp(-α_k r²) + x' · (-2(r-R) Σ c_k α_k exp(-α_k r²))
-    fn gradient(&self, r: &Vector3<f64>) -> Vector3<f64> {
+    pub(crate) fn gradient(&self, r: &Vector3<f64>) -> Vector3<f64> {
         let dr = r - self.center;
         let r2 = dr.norm_squared();
         
@@ -560,7 +560,7 @@ impl CGTO {
     /// For s-orbital: ∇²[Σ c_k exp(-α_k r²)] = Σ c_k (-6α_k + 4α_k² r²) exp(-α_k r²)
     /// For p-orbital: ∇²[x_m · R(r)] = x_m ∇²R(r) + 2 ∂R/∂x_m
     ///   where ∂R/∂x_m = -2 (r_m - R_m) Σ c_k α_k exp(-α_k r²)
-    fn laplacian(&self, r: &Vector3<f64>) -> f64 {
+    pub(crate) fn laplacian(&self, r: &Vector3<f64>) -> f64 {
         let dr = r - self.center;
         let r2 = dr.norm_squared();
         

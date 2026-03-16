@@ -155,6 +155,35 @@ pub struct Jastrow3 {
 }
 
 impl Jastrow3 {
+    /// Create a general Jastrow3 factor for any molecule.
+    ///
+    /// - `num_electrons`: total electron count
+    /// - `b_ee`, `b_en`: decay parameters for e-e and e-n terms
+    /// - `nuclei`: nuclear positions
+    /// - `charges`: nuclear charges (Z values)
+    /// - `spins`: spin assignments (+1 or -1) for each electron
+    pub fn new_general(
+        num_electrons: usize,
+        b_ee: f64,
+        b_en: f64,
+        nuclei: Vec<Vector3<f64>>,
+        charges: Vec<f64>,
+        spins: Vec<i32>,
+    ) -> Self {
+        assert_eq!(spins.len(), num_electrons);
+        assert_eq!(nuclei.len(), charges.len());
+        Self {
+            num_electrons,
+            a_ee_anti: 0.5,
+            a_ee_para: 0.25,
+            b_ee,
+            b_en,
+            nuclei,
+            charges,
+            spins,
+        }
+    }
+
     /// Create a new Jastrow3 factor for CH4.
     pub fn new_ch4(b_ee: f64, b_en: f64) -> Self {
         // CH4 geometry
@@ -368,15 +397,26 @@ impl MultiWfn for Jastrow3 {
         let dist = Normal::new(0.0, 0.5).unwrap();
         use rand_distr::Distribution;
         
-        (0..self.num_electrons)
-            .map(|i| {
-                // Place electrons near nuclei
-                let center = if i < 6 {
-                    self.nuclei[0] // near Carbon
-                } else {
-                    self.nuclei[i - 5] // near H atoms
-                };
-                center + Vector3::new(
+        // Distribute electrons near nuclei proportional to nuclear charge
+        let total_charge: f64 = self.charges.iter().sum();
+        let mut assignments: Vec<usize> = Vec::with_capacity(self.num_electrons);
+        let mut remaining = self.num_electrons;
+        for (n, &z) in self.charges.iter().enumerate() {
+            let count = if n == self.charges.len() - 1 {
+                remaining
+            } else {
+                let c = ((z / total_charge) * self.num_electrons as f64).round() as usize;
+                c.min(remaining)
+            };
+            for _ in 0..count {
+                assignments.push(n);
+            }
+            remaining -= count;
+        }
+        
+        assignments.iter()
+            .map(|&n| {
+                self.nuclei[n] + Vector3::new(
                     dist.sample(&mut rng),
                     dist.sample(&mut rng),
                     dist.sample(&mut rng),
