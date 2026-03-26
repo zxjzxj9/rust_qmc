@@ -943,6 +943,39 @@ impl MethaneGTO {
         new_wfn.set_jastrow_params(params);
         new_wfn
     }
+    
+    /// Get nuclear positions: [C, H1, H2, H3, H4].
+    pub fn get_nuclei(&self) -> Vec<Vector3<f64>> {
+        let mut nuclei = Vec::with_capacity(5);
+        nuclei.push(self.carbon);
+        for h in &self.hydrogens {
+            nuclei.push(*h);
+        }
+        nuclei
+    }
+    
+    /// Get nuclear charges: [6.0, 1.0, 1.0, 1.0, 1.0].
+    pub fn get_charges(&self) -> Vec<f64> {
+        vec![6.0, 1.0, 1.0, 1.0, 1.0]
+    }
+    
+    /// Set nuclear positions and rebuild basis and Jastrow.
+    ///
+    /// nuclei: [C, H1, H2, H3, H4] (5 positions)
+    pub fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]) {
+        assert_eq!(nuclei.len(), 5, "MethaneGTO requires exactly 5 nuclei: [C, H1, H2, H3, H4]");
+        self.carbon = nuclei[0];
+        for i in 0..4 {
+            self.hydrogens[i] = nuclei[i + 1];
+        }
+        // Rebuild AO basis at new centers
+        self.ao_basis = Self::build_631g_basis(self.carbon, &self.hydrogens);
+        // Update Jastrow nucleus positions
+        self.jastrow.nuclei[0] = self.carbon;
+        for i in 0..4 {
+            self.jastrow.nuclei[i + 1] = self.hydrogens[i];
+        }
+    }
 }
 
 impl MultiWfn for MethaneGTO {
@@ -1063,6 +1096,58 @@ impl OptimizableWfn for MethaneGTO {
     }
 }
 
+use crate::sampling::ForceCalculator;
+
+impl ForceCalculator for MethaneGTO {
+    fn num_nuclei(&self) -> usize {
+        5 // C + 4H
+    }
+
+    fn get_nuclei(&self) -> Vec<Vector3<f64>> {
+        MethaneGTO::get_nuclei(self)
+    }
+
+    fn get_charges(&self) -> Vec<f64> {
+        MethaneGTO::get_charges(self)
+    }
+
+    fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]) {
+        MethaneGTO::set_nuclei(self, nuclei)
+    }
+
+    fn hellmann_feynman_force(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        let nuclei = self.get_nuclei();
+        let charges = self.get_charges();
+        let n_nuc = nuclei.len();
+        let mut forces = vec![Vector3::zeros(); n_nuc];
+
+        // Electron-nucleus attraction: F_I += Z_I Σ_i (r_i - R_I) / |r_i - R_I|³
+        for (nuc_idx, nuc_pos) in nuclei.iter().enumerate() {
+            let z_i = charges[nuc_idx];
+            for elec_pos in r.iter() {
+                let dr = elec_pos - nuc_pos;
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[nuc_idx] += z_i * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        // Nuclear-nuclear repulsion: F_I -= Σ_{J≠I} Z_I Z_J (R_I - R_J) / |R_I - R_J|³
+        for i in 0..n_nuc {
+            for j in 0..n_nuc {
+                if i == j { continue; }
+                let dr = nuclei[i] - nuclei[j];
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[i] -= charges[i] * charges[j] * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        forces
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -7,6 +7,37 @@ pub trait EnergyCalculator {
     fn local_energy(&self, positions: &[Vector3<f64>]) -> f64;
 }
 
+/// Trait for computing nuclear forces and supporting mutable geometry.
+///
+/// Forces are estimated via the Hellmann-Feynman theorem:
+///   F_I = -∂E/∂R_I
+///
+/// The electrostatic (bare) HF force on nucleus I is:
+///   F_I = Z_I Σ_i (r_i - R_I)/|r_i - R_I|³
+///       - Σ_{J≠I} Z_I Z_J (R_I - R_J)/|R_I - R_J|³
+///
+/// VMC forces are obtained by averaging over sampled electron configurations.
+pub trait ForceCalculator: EnergyCalculator {
+    /// Number of nuclei.
+    fn num_nuclei(&self) -> usize;
+
+    /// Get current nuclear positions.
+    fn get_nuclei(&self) -> Vec<Vector3<f64>>;
+
+    /// Get nuclear charges.
+    fn get_charges(&self) -> Vec<f64>;
+
+    /// Set nuclear positions and rebuild internal state (basis, Jastrow, etc.).
+    fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]);
+
+    /// Compute the Hellmann-Feynman force on each nucleus for a given
+    /// electron configuration.
+    ///
+    /// Includes electron-nucleus attraction gradient and
+    /// nuclear-nuclear repulsion gradient.
+    fn hellmann_feynman_force(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>>;
+}
+
 /// Define an enum for branching decisions (DMC)
 pub enum BranchingResult {
     Clone { n: usize }, // n is the number of clones

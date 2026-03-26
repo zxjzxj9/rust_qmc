@@ -756,6 +756,110 @@ impl OptimizableWfn for BenzeneGTO {
 }
 
 // =============================================================================
+// Mutable geometry and ForceCalculator
+// =============================================================================
+
+impl BenzeneGTO {
+    /// Get nuclear positions: [C1..C6, H1..H6] (12 positions).
+    pub fn get_nuclei(&self) -> Vec<Vector3<f64>> {
+        let mut nuclei = Vec::with_capacity(NUM_C + NUM_H);
+        for c in &self.carbons {
+            nuclei.push(*c);
+        }
+        for h in &self.hydrogens {
+            nuclei.push(*h);
+        }
+        nuclei
+    }
+    
+    /// Get nuclear charges: [6.0 × 6, 1.0 × 6].
+    pub fn get_charges(&self) -> Vec<f64> {
+        let mut charges = Vec::with_capacity(NUM_C + NUM_H);
+        for _ in 0..NUM_C { charges.push(6.0); }
+        for _ in 0..NUM_H { charges.push(1.0); }
+        charges
+    }
+    
+    /// Set nuclear positions and rebuild basis and Jastrow.
+    ///
+    /// nuclei: [C1..C6, H1..H6] (12 positions)
+    pub fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]) {
+        assert_eq!(nuclei.len(), NUM_C + NUM_H,
+            "BenzeneGTO requires exactly {} nuclei: [C1..C6, H1..H6]", NUM_C + NUM_H);
+        for i in 0..NUM_C {
+            self.carbons[i] = nuclei[i];
+        }
+        for i in 0..NUM_H {
+            self.hydrogens[i] = nuclei[NUM_C + i];
+        }
+        // Rebuild AO basis at new centers
+        self.ao_basis = Self::build_631g_basis(&self.carbons, &self.hydrogens);
+        // Rebuild MO coefficients (they depend on C-H directions)
+        self.mo_coeffs = Self::build_mo_coefficients(&self.carbons, &self.hydrogens);
+        // Update Jastrow nucleus positions
+        for i in 0..NUM_C {
+            self.jastrow.nuclei[i] = self.carbons[i];
+        }
+        for i in 0..NUM_H {
+            self.jastrow.nuclei[NUM_C + i] = self.hydrogens[i];
+        }
+    }
+}
+
+use crate::sampling::ForceCalculator;
+
+impl ForceCalculator for BenzeneGTO {
+    fn num_nuclei(&self) -> usize {
+        NUM_C + NUM_H // 12
+    }
+
+    fn get_nuclei(&self) -> Vec<Vector3<f64>> {
+        BenzeneGTO::get_nuclei(self)
+    }
+
+    fn get_charges(&self) -> Vec<f64> {
+        BenzeneGTO::get_charges(self)
+    }
+
+    fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]) {
+        BenzeneGTO::set_nuclei(self, nuclei)
+    }
+
+    fn hellmann_feynman_force(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        let nuclei = self.get_nuclei();
+        let charges = self.get_charges();
+        let n_nuc = nuclei.len();
+        let mut forces = vec![Vector3::zeros(); n_nuc];
+
+        // Electron-nucleus attraction: F_I += Z_I Σ_i (r_i - R_I) / |r_i - R_I|³
+        for (nuc_idx, nuc_pos) in nuclei.iter().enumerate() {
+            let z_i = charges[nuc_idx];
+            for elec_pos in r.iter() {
+                let dr = elec_pos - nuc_pos;
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[nuc_idx] += z_i * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        // Nuclear-nuclear repulsion: F_I -= Σ_{J≠I} Z_I Z_J (R_I - R_J) / |R_I - R_J|³
+        for i in 0..n_nuc {
+            for j in 0..n_nuc {
+                if i == j { continue; }
+                let dr = nuclei[i] - nuclei[j];
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[i] -= charges[i] * charges[j] * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        forces
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

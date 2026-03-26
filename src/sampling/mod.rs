@@ -7,8 +7,9 @@ mod pimc;
 mod pimc_fermion;
 mod optimize;
 mod sr_optimize;
+pub mod geometry_opt;
 
-pub use traits::{EnergyCalculator, Walker, BranchingResult, VmcWalker};
+pub use traits::{EnergyCalculator, ForceCalculator, Walker, BranchingResult, VmcWalker};
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
               DDVMCParams, DDVMCResults, DriftDiffusionVMC};
 pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
@@ -23,3 +24,4 @@ pub use pimc::{
 pub use pimc_fermion::{
     TrialWavefunction, Hydrogen1s, FermionPath, FermionPIMC, run_pimc_hydrogen,
 };
+pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
