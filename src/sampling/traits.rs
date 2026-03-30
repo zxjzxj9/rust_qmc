@@ -36,6 +36,23 @@ pub trait ForceCalculator: EnergyCalculator {
     /// Includes electron-nucleus attraction gradient and
     /// nuclear-nuclear repulsion gradient.
     fn hellmann_feynman_force(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>>;
+
+    /// Compute ∂ ln|Ψ_T| / ∂R_I for each nucleus I.
+    ///
+    /// This is the derivative of the log-wavefunction with respect to
+    /// nuclear positions. It is the key ingredient for the zero-variance
+    /// (Assaraf-Caffarel) force estimator.
+    ///
+    /// For a Slater-Jastrow wavefunction Ψ = D × J:
+    ///   ∂ ln|Ψ| / ∂R_I = ∂ ln|D| / ∂R_I + ∂u / ∂R_I
+    ///
+    /// Default implementation panics — override for ZV force support.
+    fn wfn_nuclear_gradient(&self, _r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        unimplemented!(
+            "wfn_nuclear_gradient not implemented for this system. \
+             Required for zero-variance force estimation."
+        )
+    }
 }
 
 /// Define an enum for branching decisions (DMC)
