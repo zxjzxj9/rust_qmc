@@ -976,6 +976,129 @@ impl MethaneGTO {
             self.jastrow.nuclei[i + 1] = self.hydrogens[i];
         }
     }
+    
+    // =========================================================================
+    // Wavefunction nuclear derivative for ZV force estimator
+    // =========================================================================
+    
+    /// Map each AO index to its nucleus index.
+    ///
+    /// AO layout (6-31G, 17 AOs):
+    ///   [0..8]   → C (nucleus 0): 1s, 2s_in, 2px_in, 2py_in, 2pz_in, 2s_out, 2px_out, 2py_out, 2pz_out
+    ///   [9..12]  → H1..H4 inner (nuclei 1..4)
+    ///   [13..16] → H1..H4 outer (nuclei 1..4)
+    fn ao_nucleus_map(&self) -> [usize; 17] {
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, // C: AOs 0-8
+            1, 2, 3, 4,                  // H1-H4 inner: AOs 9-12
+            1, 2, 3, 4,                  // H1-H4 outer: AOs 13-16
+        ]
+    }
+    
+    /// Compute ∂ ln|D| / ∂R_I for nucleus `nuc_idx`.
+    ///
+    /// Uses the key identity: for basis function χ_ν centered at R_I,
+    ///   ∂χ_ν(r)/∂R_I = -∇_r χ_ν(r)
+    ///
+    /// Then:
+    ///   ∂ ln|D_σ|/∂R_I = Σ_{i∈σ} Σ_μ (D_σ⁻¹)_{μ,i} × ∂φ_μ(r_i)/∂R_I
+    ///
+    /// where ∂φ_μ(r)/∂R_I = -Σ_{ν on I} C_{μν} ∇χ_ν(r).
+    fn slater_nuclear_gradient(&self, r: &[Vector3<f64>], nuc_idx: usize) -> Vector3<f64> {
+        let ao_map = self.ao_nucleus_map();
+        
+        // Identify which AOs are centered on this nucleus
+        let ao_on_nuc: Vec<usize> = ao_map.iter()
+            .enumerate()
+            .filter(|(_, &n)| n == nuc_idx)
+            .map(|(i, _)| i)
+            .collect();
+        
+        if ao_on_nuc.is_empty() {
+            return Vector3::zeros();
+        }
+        
+        let mut total_grad = Vector3::zeros();
+        
+        // Process up-spin sector
+        let (_, inv_up) = self.slater_sector(r, 1);
+        let up_indices: Vec<usize> = self.spins.iter()
+            .enumerate()
+            .filter(|(_, &s)| s == 1)
+            .map(|(i, _)| i)
+            .collect();
+        
+        for (row, &elec_idx) in up_indices.iter().enumerate() {
+            for col in 0..5 {
+                // ∂φ_col(r_elec)/∂R_I = -Σ_{ν on I} C_{col,ν} ∇χ_ν(r_elec)
+                let mut d_phi = Vector3::zeros();
+                for &ao_idx in &ao_on_nuc {
+                    d_phi -= self.mo_coeffs[col][ao_idx]
+                        * self.ao_basis[ao_idx].gradient(&r[elec_idx]);
+                }
+                total_grad += inv_up[(col, row)] * d_phi;
+            }
+        }
+        
+        // Process down-spin sector
+        let (_, inv_down) = self.slater_sector(r, -1);
+        let down_indices: Vec<usize> = self.spins.iter()
+            .enumerate()
+            .filter(|(_, &s)| s == -1)
+            .map(|(i, _)| i)
+            .collect();
+        
+        for (row, &elec_idx) in down_indices.iter().enumerate() {
+            for col in 0..5 {
+                let mut d_phi = Vector3::zeros();
+                for &ao_idx in &ao_on_nuc {
+                    d_phi -= self.mo_coeffs[col][ao_idx]
+                        * self.ao_basis[ao_idx].gradient(&r[elec_idx]);
+                }
+                total_grad += inv_down[(col, row)] * d_phi;
+            }
+        }
+        
+        total_grad
+    }
+    
+    /// Compute ∂u_en / ∂R_I for nucleus `nuc_idx`.
+    ///
+    /// Only the electron-nucleus Jastrow term depends on R_I:
+    ///   u_en(i,I) = -Z_I r_iI / (1 + b_en r_iI)
+    ///
+    ///   ∂u_en/∂R_I = Σ_i Z_I (r_i - R_I) / (r_iI (1 + b_en r_iI)²)
+    fn jastrow_nuclear_gradient(&self, r: &[Vector3<f64>], nuc_idx: usize) -> Vector3<f64> {
+        let nuc_pos = if nuc_idx == 0 {
+            self.carbon
+        } else {
+            self.hydrogens[nuc_idx - 1]
+        };
+        let z_i = if nuc_idx == 0 { 6.0 } else { 1.0 };
+        let b_en = self.jastrow.b_en;
+        
+        let mut grad = Vector3::zeros();
+        for elec_pos in r.iter() {
+            let dr = elec_pos - nuc_pos;
+            let r_in = dr.norm();
+            if r_in < 1e-10 { continue; }
+            let denom = 1.0 + b_en * r_in;
+            // ∂u_en(i,I)/∂R_I = Z_I (r_i - R_I) / (r_iI (1 + b_en r_iI)²)
+            grad += z_i * dr / (r_in * denom * denom);
+        }
+        grad
+    }
+    
+    /// Compute ∂ ln|Ψ_T| / ∂R_I for all nuclei.
+    ///
+    /// Combines Slater determinant and Jastrow contributions:
+    ///   ∂ ln|Ψ|/∂R_I = ∂ ln|D_↑|/∂R_I + ∂ ln|D_↓|/∂R_I + ∂u/∂R_I
+    pub fn wfn_nuclear_gradient(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        (0..5).map(|nuc_idx| {
+            self.slater_nuclear_gradient(r, nuc_idx)
+                + self.jastrow_nuclear_gradient(r, nuc_idx)
+        }).collect()
+    }
 }
 
 impl MultiWfn for MethaneGTO {
@@ -1146,6 +1269,10 @@ impl ForceCalculator for MethaneGTO {
         }
 
         forces
+    }
+
+    fn wfn_nuclear_gradient(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        MethaneGTO::wfn_nuclear_gradient(self, r)
     }
 }
 
