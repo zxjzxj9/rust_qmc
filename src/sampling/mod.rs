@@ -8,6 +8,7 @@ mod pimc_fermion;
 mod optimize;
 mod sr_optimize;
 pub mod geometry_opt;
+pub mod force_variance;
 
 pub use traits::{EnergyCalculator, ForceCalculator, Walker, BranchingResult, VmcWalker};
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
@@ -25,3 +26,5 @@ pub use pimc_fermion::{
     TrialWavefunction, Hydrogen1s, FermionPath, FermionPIMC, run_pimc_hydrogen,
 };
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
+pub use force_variance::ForceEstimator;
+

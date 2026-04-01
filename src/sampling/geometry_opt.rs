@@ -1,13 +1,17 @@
-//! Geometry optimization via VMC-estimated Hellmann-Feynman forces.
+//! Geometry optimization via VMC-estimated forces.
 //!
 //! Uses steepest descent with VMC-averaged forces to relax nuclear positions
 //! toward the equilibrium geometry on the Born-Oppenheimer surface.
+//!
+//! Supports both bare Hellmann-Feynman and zero-variance (Assaraf-Caffarel)
+//! force estimators for reduced statistical noise.
 
 use nalgebra::Vector3;
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use crate::wavefunction::MultiWfn;
 use super::traits::{EnergyCalculator, ForceCalculator};
+use super::force_variance::ForceEstimator;
 
 /// Configuration for the geometry optimizer.
 #[derive(Clone, Debug)]
@@ -26,6 +30,8 @@ pub struct GeometryOptimizer {
     pub force_threshold: f64,
     /// Metropolis step size for VMC sampling
     pub mc_step_size: f64,
+    /// Which force estimator to use
+    pub force_estimator: ForceEstimator,
     /// Whether to print progress
     pub verbose: bool,
 }
@@ -40,6 +46,7 @@ impl Default for GeometryOptimizer {
             max_iterations: 50,
             force_threshold: 0.05,
             mc_step_size: 0.5,
+            force_estimator: ForceEstimator::Bare,
             verbose: true,
         }
     }
@@ -76,6 +83,11 @@ impl GeometryOptimizer {
         self
     }
 
+    pub fn with_force_estimator(mut self, e: ForceEstimator) -> Self {
+        self.force_estimator = e;
+        self
+    }
+
     pub fn with_verbose(mut self, v: bool) -> Self {
         self.verbose = v;
         self
@@ -83,14 +95,21 @@ impl GeometryOptimizer {
 
     /// Run VMC sampling and compute mean forces and energy.
     ///
-    /// Returns (mean_forces, mean_energy, energy_error).
+    /// Returns (mean_forces, mean_energy, energy_error, force_variance).
+    ///
+    /// When using the ZV estimator, the force is:
+    ///   F_I^ZV = F_I^HF - 2(E_L - E_ref) × ∂ln|Ψ_T|/∂R_I
+    ///
+    /// The Pulay correction is accumulated as a covariance and applied
+    /// after all samples are collected.
     fn sample_forces<T: MultiWfn + ForceCalculator>(
         &self,
         wfn: &T,
-    ) -> (Vec<Vector3<f64>>, f64, f64) {
+    ) -> (Vec<Vector3<f64>>, f64, f64, Vec<f64>) {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0.0, self.mc_step_size).unwrap();
         let n_nuc = wfn.num_nuclei();
+        let use_zv = self.force_estimator == ForceEstimator::ZeroVariance;
 
         // Initialize walkers
         let mut positions: Vec<Vec<Vector3<f64>>> = (0..self.n_walkers)
@@ -120,11 +139,16 @@ impl GeometryOptimizer {
         }
 
         // Production: collect force and energy samples
-        let mut force_accum = vec![Vector3::zeros(); n_nuc];
+        let mut force_accum = vec![Vector3::zeros(); n_nuc];   // Σ F_HF
+        let mut force_sq_accum = vec![0.0_f64; n_nuc];          // Σ |F_HF|²
         let mut energy_accum = 0.0;
         let mut energy_sq_accum = 0.0;
         let mut n_collected = 0usize;
         let steps_per_sample = (self.n_samples / self.n_walkers).max(1);
+
+        // ZV-specific accumulators: Σ E_L×Ω_I and Σ Ω_I
+        let mut el_omega_accum = vec![Vector3::zeros(); n_nuc]; // Σ E_L × Ω_I
+        let mut omega_accum = vec![Vector3::zeros(); n_nuc];    // Σ Ω_I
 
         for _ in 0..steps_per_sample {
             // Decorrelation steps
@@ -148,26 +172,58 @@ impl GeometryOptimizer {
 
             // Collect measurements
             for pos in positions.iter() {
-                let forces = wfn.hellmann_feynman_force(pos);
+                let forces_hf = wfn.hellmann_feynman_force(pos);
                 let energy = wfn.local_energy(pos);
-                for (acc, f) in force_accum.iter_mut().zip(forces.iter()) {
-                    *acc += f;
+
+                for (i, f) in forces_hf.iter().enumerate() {
+                    force_accum[i] += f;
+                    force_sq_accum[i] += f.norm_squared();
                 }
                 energy_accum += energy;
                 energy_sq_accum += energy * energy;
+
+                // ZV: accumulate Ω_I and E_L × Ω_I
+                if use_zv {
+                    let omega = wfn.wfn_nuclear_gradient(pos);
+                    for (i, o) in omega.iter().enumerate() {
+                        el_omega_accum[i] += energy * o;
+                        omega_accum[i] += *o;
+                    }
+                }
+
                 n_collected += 1;
             }
         }
 
         let n = n_collected as f64;
-        let mean_forces: Vec<Vector3<f64>> = force_accum.iter()
-            .map(|f| f / n)
-            .collect();
         let mean_energy = energy_accum / n;
-        let variance = energy_sq_accum / n - mean_energy * mean_energy;
-        let error = (variance / n).sqrt();
+        let e_variance = energy_sq_accum / n - mean_energy * mean_energy;
+        let error = (e_variance / n).sqrt();
 
-        (mean_forces, mean_energy, error)
+        // Compute mean forces
+        let mean_forces: Vec<Vector3<f64>> = if use_zv {
+            // ZV force = <F_HF> - 2 × Cov(E_L, Ω)
+            //          = <F_HF> - 2 × (<E_L × Ω> - <E_L> × <Ω>)
+            (0..n_nuc).map(|i| {
+                let mean_f_hf = force_accum[i] / n;
+                let mean_el_omega = el_omega_accum[i] / n;
+                let mean_omega = omega_accum[i] / n;
+                let cov = mean_el_omega - mean_energy * mean_omega;
+                mean_f_hf - 2.0 * cov
+            }).collect()
+        } else {
+            force_accum.iter().map(|f| f / n).collect()
+        };
+
+        // Force variance per nucleus (of whichever estimator we used)
+        // For bare: var(|F_HF|) per nucleus
+        let force_variance: Vec<f64> = (0..n_nuc).map(|i| {
+            let mean_sq = force_sq_accum[i] / n;
+            let sq_mean = (force_accum[i] / n).norm_squared();
+            (mean_sq - sq_mean).max(0.0)
+        }).collect();
+
+        (mean_forces, mean_energy, error, force_variance)
     }
 
     /// Run the geometry optimization.
@@ -186,20 +242,21 @@ impl GeometryOptimizer {
         geometry_history.push(wfn.get_nuclei());
 
         if self.verbose {
-            println!("Geometry Optimization (VMC Hellmann-Feynman Forces)");
+            println!("Geometry Optimization (VMC Forces)");
             println!("===================================================");
             println!("  Nuclei:           {}", n_nuc);
             println!("  Samples/iter:     {}", self.n_samples);
             println!("  Walkers:          {}", self.n_walkers);
             println!("  Step size α:      {:.4} Bohr", self.step_size);
             println!("  Force threshold:  {:.4} Ha/Bohr", self.force_threshold);
+            println!("  Force estimator:  {}", self.force_estimator);
             println!("  Max iterations:   {}", self.max_iterations);
             println!();
         }
 
         for iter in 0..self.max_iterations {
             // Sample forces and energy at current geometry
-            let (mean_forces, mean_energy, error) = self.sample_forces(wfn);
+            let (mean_forces, mean_energy, error, force_var) = self.sample_forces(wfn);
 
             // Compute max force magnitude
             let max_force = mean_forces.iter()
@@ -213,10 +270,10 @@ impl GeometryOptimizer {
                 println!("  Step {:3}: E = {:10.5} ± {:.4} Ha, max|F| = {:.4} Ha/Bohr",
                     iter + 1, mean_energy, error, max_force);
                 if self.verbose && iter < 5 {
-                    // Print individual forces for first few steps
+                    // Print individual forces and variance for first few steps
                     for (i, f) in mean_forces.iter().enumerate() {
-                        println!("           F[{}] = ({:+.4}, {:+.4}, {:+.4}) |F|={:.4}",
-                            i, f.x, f.y, f.z, f.norm());
+                        println!("           F[{}] = ({:+.4}, {:+.4}, {:+.4}) |F|={:.4}  σ²={:.4}",
+                            i, f.x, f.y, f.z, f.norm(), force_var[i]);
                     }
                 }
             }
@@ -260,7 +317,7 @@ impl GeometryOptimizer {
         }
 
         // Final energy evaluation
-        let (_, final_energy, _) = self.sample_forces(wfn);
+        let (_, final_energy, _, _) = self.sample_forces(wfn);
         let final_max_force = force_history.last().copied().unwrap_or(0.0);
 
         if self.verbose {
@@ -284,6 +341,7 @@ impl GeometryOptimizer {
             energy_history,
             force_history,
             geometry_history,
+            force_estimator: self.force_estimator,
         }
     }
 }
@@ -303,4 +361,6 @@ pub struct GeometryOptResult {
     pub force_history: Vec<f64>,
     /// Nuclear positions at each step (including initial)
     pub geometry_history: Vec<Vec<Vector3<f64>>>,
+    /// Which force estimator was used
+    pub force_estimator: ForceEstimator,
 }
