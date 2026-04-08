@@ -198,3 +198,94 @@ impl EnergyCalculator for H2MoleculeMO {
         kinetic + potential
     }
 }
+
+// =============================================================================
+// ForceCalculator for H2MoleculeMO
+// =============================================================================
+
+use crate::sampling::ForceCalculator;
+
+impl ForceCalculator for H2MoleculeMO {
+    fn num_nuclei(&self) -> usize {
+        2
+    }
+
+    fn get_nuclei(&self) -> Vec<Vector3<f64>> {
+        vec![self.orbital1.center, self.orbital2.center]
+    }
+
+    fn get_charges(&self) -> Vec<f64> {
+        vec![1.0, 1.0]
+    }
+
+    fn set_nuclei(&mut self, nuclei: &[Vector3<f64>]) {
+        assert_eq!(nuclei.len(), 2, "H₂ requires exactly 2 nuclear positions");
+        self.orbital1.center = nuclei[0];
+        self.orbital2.center = nuclei[1];
+    }
+
+    fn hellmann_feynman_force(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        let nuclei = self.get_nuclei();
+        let charges = self.get_charges();
+        let n_nuc = nuclei.len();
+        let mut forces = vec![Vector3::zeros(); n_nuc];
+
+        // Electron-nucleus attraction: F_I += Z_I Σ_i (r_i - R_I) / |r_i - R_I|³
+        for (nuc_idx, nuc_pos) in nuclei.iter().enumerate() {
+            let z_i = charges[nuc_idx];
+            for elec_pos in r.iter() {
+                let dr = elec_pos - nuc_pos;
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[nuc_idx] += z_i * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        // Nuclear-nuclear repulsion: F_I -= Σ_{J≠I} Z_I Z_J (R_I - R_J) / |R_I - R_J|³
+        for i in 0..n_nuc {
+            for j in 0..n_nuc {
+                if i == j { continue; }
+                let dr = nuclei[i] - nuclei[j];
+                let dist = dr.norm();
+                if dist > 1e-10 {
+                    forces[i] -= charges[i] * charges[j] * dr / (dist * dist * dist);
+                }
+            }
+        }
+
+        forces
+    }
+
+    fn wfn_nuclear_gradient(&self, r: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
+        // Numerical ∂ ln|Ψ_T| / ∂R_I using central differences.
+        // Small system so this is affordable.
+        let h = 1e-5;
+        let nuclei = self.get_nuclei();
+        let mut gradients = vec![Vector3::zeros(); 2];
+
+        for nuc_idx in 0..2 {
+            for axis in 0..3 {
+                let mut nuc_fwd = nuclei.clone();
+                let mut nuc_bwd = nuclei.clone();
+                nuc_fwd[nuc_idx][axis] += h;
+                nuc_bwd[nuc_idx][axis] -= h;
+
+                // Build shifted wavefunctions
+                let mut wfn_fwd = self.clone();
+                wfn_fwd.set_nuclei(&nuc_fwd);
+                let mut wfn_bwd = self.clone();
+                wfn_bwd.set_nuclei(&nuc_bwd);
+
+                let psi_fwd = wfn_fwd.evaluate(r).abs();
+                let psi_bwd = wfn_bwd.evaluate(r).abs();
+
+                if psi_fwd > 1e-30 && psi_bwd > 1e-30 {
+                    gradients[nuc_idx][axis] = (psi_fwd.ln() - psi_bwd.ln()) / (2.0 * h);
+                }
+            }
+        }
+
+        gradients
+    }
+}

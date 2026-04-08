@@ -3,6 +3,7 @@
 mod traits;
 mod vmc;
 mod dmc;
+mod is_dmc;
 mod pimc;
 mod pimc_fermion;
 mod optimize;
@@ -16,6 +17,7 @@ pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
 pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
 pub use sr_optimize::{SROptimizer, SRResult};
 pub use dmc::{run_dmc_sampling, HarmonicWalker, HydrogenAtomWalker, HydrogenMoleculeWalker};
+pub use is_dmc::{ISDMCParams, ISDMCResults, ImportanceSampledDMC};
 pub use pimc::{
     QuantumPath, PIMCSimulation, run_pimc_harmonic,
     // Generalized potentials
