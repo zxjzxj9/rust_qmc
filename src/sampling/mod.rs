@@ -6,6 +6,7 @@ mod dmc;
 mod is_dmc;
 mod pimc;
 mod pimc_fermion;
+mod pimd;
 mod optimize;
 mod sr_optimize;
 pub mod geometry_opt;
@@ -22,10 +23,15 @@ pub use pimc::{
     QuantumPath, PIMCSimulation, run_pimc_harmonic,
     // Generalized potentials
     Potential, HarmonicPotential, SombreroPotential, DoubleWellPotential,
+    ProtonTransferPotential,
     GeneralPath, GeneralPIMC, run_pimc_sombrero,
 };
 pub use pimc_fermion::{
     TrialWavefunction, Hydrogen1s, FermionPath, FermionPIMC, run_pimc_hydrogen,
+};
+pub use pimd::{
+    NormalModeTransform, PILEThermostat, RingPolymer, PIMDSimulation,
+    run_pimd_proton_transfer,
 };
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
 pub use force_variance::ForceEstimator;

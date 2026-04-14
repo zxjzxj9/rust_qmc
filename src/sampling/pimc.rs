@@ -498,10 +498,17 @@ pub fn run_pimc_harmonic(
 // Generalized Potential Support
 // =============================================================================
 
-/// Trait for 1D potentials that can be used with PIMC
+/// Trait for 1D potentials that can be used with PIMC/PIMD
 pub trait Potential: Clone + Send + Sync {
     /// Evaluate the potential V(x) at position x
     fn evaluate(&self, x: f64) -> f64;
+    
+    /// Compute the force F(x) = -dV/dx at position x
+    /// Default implementation uses numerical central difference
+    fn force(&self, x: f64) -> f64 {
+        let h = 1e-7;
+        -(self.evaluate(x + h) - self.evaluate(x - h)) / (2.0 * h)
+    }
     
     /// Name of the potential for display
     fn name(&self) -> &'static str;
@@ -520,6 +527,10 @@ pub struct HarmonicPotential {
 impl Potential for HarmonicPotential {
     fn evaluate(&self, x: f64) -> f64 {
         0.5 * self.mass * self.omega * self.omega * x * x
+    }
+    
+    fn force(&self, x: f64) -> f64 {
+        -self.mass * self.omega * self.omega * x
     }
     
     fn name(&self) -> &'static str {
@@ -577,6 +588,11 @@ impl Potential for SombreroPotential {
         -0.5 * self.mu_squared * x * x + 0.25 * self.lambda * x.powi(4)
     }
     
+    fn force(&self, x: f64) -> f64 {
+        // F = -dV/dx = μ²x - λx³
+        self.mu_squared * x - self.lambda * x.powi(3)
+    }
+    
     fn name(&self) -> &'static str {
         "Sombrero (Mexican Hat)"
     }
@@ -601,12 +617,79 @@ impl Potential for DoubleWellPotential {
         self.a * diff * diff
     }
     
+    fn force(&self, x: f64) -> f64 {
+        // V = a(x² - b²)², F = -dV/dx = -4ax(x² - b²)
+        -4.0 * self.a * x * (x * x - self.b * self.b)
+    }
+    
     fn name(&self) -> &'static str {
         "Double Well"
     }
     
     fn init_width(&self) -> f64 {
         self.b
+    }
+}
+
+/// Proton transfer double-well potential for O−H···O hydrogen bond tunneling
+///
+/// V(x) = V_b × (x²/d² - 1)²
+///
+/// This models a symmetric double well with:
+/// - Minima at x = ±d (donor and acceptor sites)
+/// - Barrier height V_b at x = 0
+/// - Typical parameters: d ~ 0.5–1.0 Bohr, V_b ~ 0.01–0.05 Hartree
+///
+/// The potential is equivalent to a(x² - b²)² with a = V_b/d⁴, b = d,
+/// but parameterized in the physically intuitive proton transfer language.
+#[derive(Clone)]
+pub struct ProtonTransferPotential {
+    /// Barrier height at x=0, in Hartree
+    pub barrier_height: f64,
+    /// Half-distance between wells (±d), in Bohr
+    pub well_distance: f64,
+    /// Optional asymmetry: tilt ε adds a linear term εx to break symmetry
+    pub asymmetry: f64,
+}
+
+impl ProtonTransferPotential {
+    /// Create a symmetric proton transfer potential
+    pub fn symmetric(barrier_height: f64, well_distance: f64) -> Self {
+        Self { barrier_height, well_distance, asymmetry: 0.0 }
+    }
+
+    /// Create an asymmetric proton transfer potential
+    /// `asymmetry` > 0 favors the right well (x > 0)
+    pub fn asymmetric(barrier_height: f64, well_distance: f64, asymmetry: f64) -> Self {
+        Self { barrier_height, well_distance, asymmetry }
+    }
+
+    /// Effective frequency at the bottom of a well (harmonic approximation)
+    /// ω = √(V''(±d)/m) where V''(±d) = 8 V_b / d²
+    pub fn well_frequency(&self, mass: f64) -> f64 {
+        (8.0 * self.barrier_height / (self.well_distance * self.well_distance * mass)).sqrt()
+    }
+}
+
+impl Potential for ProtonTransferPotential {
+    fn evaluate(&self, x: f64) -> f64 {
+        let d2 = self.well_distance * self.well_distance;
+        let ratio = x * x / d2 - 1.0;
+        self.barrier_height * ratio * ratio + self.asymmetry * x
+    }
+
+    fn force(&self, x: f64) -> f64 {
+        let d2 = self.well_distance * self.well_distance;
+        // F = -dV/dx = -4 V_b x (x²/d² - 1) / d² - ε
+        -4.0 * self.barrier_height * x * (x * x / d2 - 1.0) / d2 - self.asymmetry
+    }
+
+    fn name(&self) -> &'static str {
+        "Proton Transfer Double-Well"
+    }
+
+    fn init_width(&self) -> f64 {
+        self.well_distance
     }
 }
 

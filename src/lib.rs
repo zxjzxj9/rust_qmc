@@ -13,7 +13,7 @@ pub mod io;
 pub use wavefunction::{SingleWfn, MultiWfn, OptimizableWfn, STO, Slater1s, STOSlaterDet, init_li_sto};
 pub use correlation::{Jastrow1, Jastrow2, Jastrow3};
 pub use systems::{H2MoleculeVB, H2MoleculeMO, Lithium, LatticeVector, LithiumCrystalWalker, LithiumFCC, HomogeneousElectronGas, HEGResults, JastrowForm, Methane, MethaneGTO, JastrowParams, BenzeneGTO};
-pub use sampling::{EnergyCalculator, ForceCalculator, MCMCParams, MCMCSimulation, MCMCResults, Walker, BranchingResult, VmcWalker, JastrowOptimizer, OptimizationResult, SamplingStats, DDVMCParams, DDVMCResults, DriftDiffusionVMC, SROptimizer, SRResult, GeometryOptimizer, GeometryOptResult, ForceEstimator, ISDMCParams, ISDMCResults, ImportanceSampledDMC};
+pub use sampling::{EnergyCalculator, ForceCalculator, MCMCParams, MCMCSimulation, MCMCResults, Walker, BranchingResult, VmcWalker, JastrowOptimizer, OptimizationResult, SamplingStats, DDVMCParams, DDVMCResults, DriftDiffusionVMC, SROptimizer, SRResult, GeometryOptimizer, GeometryOptResult, ForceEstimator, ISDMCParams, ISDMCResults, ImportanceSampledDMC, PIMDSimulation, RingPolymer, PILEThermostat, NormalModeTransform};
 pub use io::{read_h2molecule_vb, read_h2molecule_mo};
 
 #[cfg(test)]
