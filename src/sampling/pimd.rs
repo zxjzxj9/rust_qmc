@@ -551,6 +551,7 @@ impl<P: Potential> PIMDSimulation<P> {
     }
 
     /// Build position histogram |ψ(x)|² from all bead positions of all polymers
+    /// (single snapshot — for accumulated statistics, use accumulate_histogram)
     pub fn build_histogram(&self, n_bins: usize, x_min: f64, x_max: f64) -> (Vec<f64>, Vec<f64>) {
         let bin_width = (x_max - x_min) / n_bins as f64;
         let mut counts = vec![0.0; n_bins];
@@ -580,6 +581,26 @@ impl<P: Potential> PIMDSimulation<P> {
             .collect();
 
         (x_values, counts)
+    }
+
+    /// Accumulate current bead positions into an existing histogram buffer.
+    /// Call this repeatedly during production to build up smooth statistics.
+    /// The `counts` vector should be initialized to zeros and will be 
+    /// normalized at the end by the caller.
+    pub fn accumulate_histogram(&self, counts: &mut [f64], x_min: f64, x_max: f64) {
+        let n_bins = counts.len();
+        let bin_width = (x_max - x_min) / n_bins as f64;
+
+        for polymer in &self.polymers {
+            for &x in &polymer.positions {
+                if x >= x_min && x < x_max {
+                    let bin = ((x - x_min) / bin_width) as usize;
+                    if bin < n_bins {
+                        counts[bin] += 1.0;
+                    }
+                }
+            }
+        }
     }
 
     /// Compute the fraction of beads that have tunneled (crossed x=0)
@@ -667,9 +688,15 @@ pub fn run_pimd_proton_transfer(
     }
     println!();
 
-    // Production classical
+    // Production classical — accumulate histogram over trajectory
+    let n_hist_bins = 200;
+    let hist_xmin = -3.0 * well_distance;
+    let hist_xmax = 3.0 * well_distance;
     let mut cl_energies = Vec::with_capacity(n_production);
     let mut cl_centroids = Vec::with_capacity(n_production);
+    let mut cl_tunnel_sum = 0.0_f64;
+    let mut cl_tunnel_count = 0_usize;
+    let mut cl_hist = vec![0.0_f64; n_hist_bins];
     let sample_interval = 10; // Sample every 10 steps to reduce correlation
 
     for step in 0..n_production {
@@ -677,6 +704,9 @@ pub fn run_pimd_proton_transfer(
         if step % sample_interval == 0 {
             cl_energies.push(classical_sim.average_virial_energy());
             cl_centroids.push(classical_sim.average_centroid());
+            cl_tunnel_sum += classical_sim.tunneling_fraction();
+            cl_tunnel_count += 1;
+            classical_sim.accumulate_histogram(&mut cl_hist, hist_xmin, hist_xmax);
         }
         if step % (n_production / 5).max(1) == 0 {
             println!("  Prod step {:6}: E_vir = {:10.6}, <x> = {:8.4}, tunnel = {:.2}%",
@@ -686,7 +716,15 @@ pub fn run_pimd_proton_transfer(
         }
     }
 
-    let (cl_x, cl_psi2) = classical_sim.build_histogram(100, -3.0 * well_distance, 3.0 * well_distance);
+    // Normalize classical histogram to probability density
+    let cl_hist_total: f64 = cl_hist.iter().sum();
+    let hist_bin_width = (hist_xmax - hist_xmin) / n_hist_bins as f64;
+    let cl_psi2: Vec<f64> = cl_hist.iter()
+        .map(|&c| if cl_hist_total > 0.0 { c / (cl_hist_total * hist_bin_width) } else { 0.0 })
+        .collect();
+    let cl_x: Vec<f64> = (0..n_hist_bins)
+        .map(|i| hist_xmin + (i as f64 + 0.5) * hist_bin_width)
+        .collect();
 
     // Classical statistics
     let n_cl = cl_energies.len() as f64;
@@ -694,7 +732,7 @@ pub fn run_pimd_proton_transfer(
     let cl_var_e = cl_energies.iter().map(|e| (e - cl_mean_e).powi(2)).sum::<f64>() / n_cl;
     let cl_stderr_e = cl_var_e.sqrt() / n_cl.sqrt();
     let cl_mean_x = cl_centroids.iter().sum::<f64>() / n_cl;
-    let cl_tunnel = classical_sim.tunneling_fraction();
+    let cl_tunnel = cl_tunnel_sum / cl_tunnel_count as f64;
 
     println!();
     println!("  Classical results:");
@@ -726,10 +764,13 @@ pub fn run_pimd_proton_transfer(
     }
     println!();
 
-    // Production quantum
+    // Production quantum — accumulate histogram over trajectory
     let mut q_energies = Vec::with_capacity(n_production);
     let mut q_centroids = Vec::with_capacity(n_production);
     let mut q_rg = Vec::with_capacity(n_production);
+    let mut q_tunnel_sum = 0.0_f64;
+    let mut q_tunnel_count = 0_usize;
+    let mut q_hist = vec![0.0_f64; n_hist_bins];
 
     for step in 0..n_production {
         quantum_sim.step_obabo();
@@ -737,6 +778,9 @@ pub fn run_pimd_proton_transfer(
             q_energies.push(quantum_sim.average_virial_energy());
             q_centroids.push(quantum_sim.average_centroid());
             q_rg.push(quantum_sim.average_radius_of_gyration());
+            q_tunnel_sum += quantum_sim.tunneling_fraction();
+            q_tunnel_count += 1;
+            quantum_sim.accumulate_histogram(&mut q_hist, hist_xmin, hist_xmax);
         }
         if step % (n_production / 5).max(1) == 0 {
             println!("  Prod step {:6}: E_vir = {:10.6}, <x> = {:8.4}, R_g = {:8.4}, tunnel = {:.2}%",
@@ -747,7 +791,11 @@ pub fn run_pimd_proton_transfer(
         }
     }
 
-    let (_q_x, q_psi2) = quantum_sim.build_histogram(100, -3.0 * well_distance, 3.0 * well_distance);
+    // Normalize quantum histogram to probability density
+    let q_hist_total: f64 = q_hist.iter().sum();
+    let q_psi2: Vec<f64> = q_hist.iter()
+        .map(|&c| if q_hist_total > 0.0 { c / (q_hist_total * hist_bin_width) } else { 0.0 })
+        .collect();
 
     // Quantum statistics
     let n_q = q_energies.len() as f64;
@@ -756,7 +804,7 @@ pub fn run_pimd_proton_transfer(
     let q_stderr_e = q_var_e.sqrt() / n_q.sqrt();
     let q_mean_x = q_centroids.iter().sum::<f64>() / n_q;
     let q_mean_rg = q_rg.iter().sum::<f64>() / n_q;
-    let q_tunnel = quantum_sim.tunneling_fraction();
+    let q_tunnel = q_tunnel_sum / q_tunnel_count as f64;
 
     println!();
     println!("  Quantum results:");
