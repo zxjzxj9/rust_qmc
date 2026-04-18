@@ -7,6 +7,7 @@ mod is_dmc;
 mod pimc;
 mod pimc_fermion;
 mod pimd;
+mod pimd_molecular;
 mod optimize;
 mod sr_optimize;
 pub mod geometry_opt;
@@ -32,6 +33,10 @@ pub use pimc_fermion::{
 pub use pimd::{
     NormalModeTransform, PILEThermostat, RingPolymer, PIMDSimulation,
     run_pimd_proton_transfer,
+};
+pub use pimd_molecular::{
+    MolecularPotential, MolecularRingPolymer, MolecularPILE, MolecularPIMD,
+    BifluoridePES, run_pimd_bifluoride,
 };
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
 pub use force_variance::ForceEstimator;
