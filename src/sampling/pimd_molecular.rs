@@ -1034,12 +1034,532 @@ pub fn run_pimd_bifluoride(
 }
 
 // =============================================================================
+// Zundel Cation (H₅O₂⁺) Potential Energy Surface
+// =============================================================================
+
+/// Potential energy surface for the Zundel cation H₅O₂⁺ (H₂O···H⁺···OH₂).
+///
+/// Models proton transfer between two water molecules:
+///   H₂O−H⁺···OH₂  ↔  H₂O···H⁺−OH₂
+///
+/// Atom ordering (7 atoms, 21 DOF):
+///   0: O₁      (donor oxygen)
+///   1: H₁a     (spectator H on water 1)
+///   2: H₁b     (spectator H on water 1)
+///   3: H*      (shared/transferring proton)  
+///   4: O₂      (acceptor oxygen)
+///   5: H₂a     (spectator H on water 2)
+///   6: H₂b     (spectator H on water 2)
+///
+/// PES components:
+/// 1. Intramolecular O−H stretches (Morse) for spectator H atoms
+/// 2. H−O−H bending (harmonic) for spectator angles
+/// 3. O···O stretch (harmonic around equilibrium)
+/// 4. Shared proton double-well (LEPS-style double-Morse coupling)
+/// 5. H* bending perpendicular to O···O axis
+///
+/// Parameters from MP2/aug-cc-pVTZ and experimental data:
+/// - O···O distance: ~2.40 Å = 4.535 Bohr (Zundel geometry)
+/// - Barrier: ~0.5–1.0 kcal/mol (very low — nearly barrierless)
+/// - O−H(spectator): 0.98 Å = 1.852 Bohr
+/// - H−O−H angle: ~113° (wider than isolated water due to charge)
+///
+/// Reference: Huang et al., J. Chem. Phys. 122, 044308 (2005)
+#[derive(Clone)]
+pub struct ZundelPES {
+    /// O···O equilibrium distance (Bohr)
+    pub r_oo_eq: f64,
+    /// O···O force constant (Hartree/Bohr²)
+    pub k_oo: f64,
+    /// O−H(spectator) equilibrium distance (Bohr)
+    pub r_oh_eq: f64,
+    /// O−H* equilibrium distance to nearest O (Bohr)
+    pub r_oh_star_eq: f64,
+    /// O−H Morse well depth (Hartree)
+    pub d_oh: f64,
+    /// O−H Morse width parameter (1/Bohr)
+    pub alpha_oh: f64,
+    /// O−H* Morse depth for shared proton (Hartree)
+    pub d_oh_star: f64,
+    /// O−H* Morse width for shared proton (1/Bohr)
+    pub alpha_oh_star: f64,
+    /// Barrier height for proton transfer (Hartree)
+    pub barrier_height: f64,
+    /// H−O−H bending force constant (Hartree/rad²)
+    pub k_bend: f64,
+    /// H* bending force constant perpendicular to O-O (Hartree/Bohr²)
+    pub k_bend_star: f64,
+    /// Atom masses
+    masses_arr: [f64; 7],
+}
+
+impl ZundelPES {
+    /// Create a Zundel PES with default parameters from high-level ab initio data.
+    pub fn new() -> Self {
+        let m_o = 29156.95; // ¹⁶O mass in electron masses
+        let m_h = 1836.15;  // ¹H mass
+
+        Self {
+            // O···O distance: 2.40 Å typical Zundel
+            r_oo_eq: 4.535,
+            k_oo: 0.10,
+
+            // Spectator O-H bonds
+            r_oh_eq: 1.852,     // 0.98 Å
+            d_oh: 0.185,        // ~116 kcal/mol
+            alpha_oh: 1.21,
+
+            // Shared proton O-H* bond
+            r_oh_star_eq: 1.814, // ~0.96 Å — slightly shorter
+            d_oh_star: 0.17,    // Shallower well for shared proton
+            alpha_oh_star: 1.10,
+            barrier_height: 0.0012, // ~0.75 kcal/mol — very low barrier
+
+            // Bending
+            k_bend: 0.11,       // H-O-H bending
+            k_bend_star: 0.04,  // H* perpendicular bending
+
+            masses_arr: [m_o, m_h, m_h, m_h, m_o, m_h, m_h],
+        }
+    }
+
+    /// Distance between two atoms
+    fn distance(coords: &[f64], a: usize, b: usize) -> f64 {
+        let mut d2 = 0.0;
+        for xyz in 0..3 {
+            let dr = coords[3 * a + xyz] - coords[3 * b + xyz];
+            d2 += dr * dr;
+        }
+        d2.sqrt()
+    }
+
+    /// Unit vector from atom a to atom b
+    fn unit_vec(coords: &[f64], a: usize, b: usize) -> [f64; 3] {
+        let r = Self::distance(coords, a, b);
+        let mut u = [0.0; 3];
+        if r > 1e-15 {
+            for xyz in 0..3 {
+                u[xyz] = (coords[3 * b + xyz] - coords[3 * a + xyz]) / r;
+            }
+        }
+        u
+    }
+
+    /// Angle A-B-C in radians (B is the vertex)
+    fn angle(coords: &[f64], a: usize, b: usize, c: usize) -> f64 {
+        let mut ba = [0.0; 3];
+        let mut bc = [0.0; 3];
+        for xyz in 0..3 {
+            ba[xyz] = coords[3 * a + xyz] - coords[3 * b + xyz];
+            bc[xyz] = coords[3 * c + xyz] - coords[3 * b + xyz];
+        }
+        let dot = ba[0]*bc[0] + ba[1]*bc[1] + ba[2]*bc[2];
+        let mag_ba = (ba[0]*ba[0] + ba[1]*ba[1] + ba[2]*ba[2]).sqrt();
+        let mag_bc = (bc[0]*bc[0] + bc[1]*bc[1] + bc[2]*bc[2]).sqrt();
+        let cos_theta = (dot / (mag_ba * mag_bc).max(1e-15)).clamp(-1.0, 1.0);
+        cos_theta.acos()
+    }
+
+    /// Perpendicular distance squared of atom `h` from the line through atoms `a` and `b`
+    fn perp_dist2(coords: &[f64], h: usize, a: usize, b: usize) -> f64 {
+        let ab = Self::unit_vec(coords, a, b);
+        let ah = [
+            coords[3*h] - coords[3*a],
+            coords[3*h+1] - coords[3*a+1],
+            coords[3*h+2] - coords[3*a+2],
+        ];
+        let proj = ah[0]*ab[0] + ah[1]*ab[1] + ah[2]*ab[2];
+        let ah2 = ah[0]*ah[0] + ah[1]*ah[1] + ah[2]*ah[2];
+        (ah2 - proj * proj).max(0.0)
+    }
+}
+
+impl MolecularPotential for ZundelPES {
+    fn n_atoms(&self) -> usize { 7 }
+
+    fn energy(&self, coords: &[f64]) -> f64 {
+        // Atom indices: O₁=0, H₁a=1, H₁b=2, H*=3, O₂=4, H₂a=5, H₂b=6
+        let r_o1h1a = Self::distance(coords, 0, 1);
+        let r_o1h1b = Self::distance(coords, 0, 2);
+        let r_o1hs  = Self::distance(coords, 0, 3); // O₁ to shared H
+        let r_o2hs  = Self::distance(coords, 4, 3); // O₂ to shared H
+        let r_o2h2a = Self::distance(coords, 4, 5);
+        let r_o2h2b = Self::distance(coords, 4, 6);
+        let r_oo    = Self::distance(coords, 0, 4);
+
+        // =====================================================================
+        // 1. O···O stretch: harmonic around equilibrium
+        // =====================================================================
+        let v_oo = 0.5 * self.k_oo * (r_oo - self.r_oo_eq).powi(2);
+
+        // =====================================================================
+        // 2. Spectator O−H Morse stretches (4 bonds)
+        // =====================================================================
+        let morse = |r: f64| -> f64 {
+            self.d_oh * (1.0 - (-self.alpha_oh * (r - self.r_oh_eq)).exp()).powi(2)
+        };
+        let v_spectator = morse(r_o1h1a) + morse(r_o1h1b) + morse(r_o2h2a) + morse(r_o2h2b);
+
+        // =====================================================================
+        // 3. Shared proton double-well (LEPS-style double-Morse coupling)
+        // =====================================================================
+        let morse_s1 = self.d_oh_star
+            * (1.0 - (-self.alpha_oh_star * (r_o1hs - self.r_oh_star_eq)).exp()).powi(2);
+        let morse_s2 = self.d_oh_star
+            * (1.0 - (-self.alpha_oh_star * (r_o2hs - self.r_oh_star_eq)).exp()).powi(2);
+
+        let avg = (morse_s1 + morse_s2) / 2.0;
+        let diff2 = (morse_s1 - morse_s2).powi(2) / 4.0;
+
+        // Coupling parameter from barrier height
+        let r_ts = r_oo / 2.0;
+        let m_ts = self.d_oh_star
+            * (1.0 - (-self.alpha_oh_star * (r_ts - self.r_oh_star_eq)).exp()).powi(2);
+        let delta = (m_ts - self.barrier_height).max(0.0005);
+
+        let v_shared = avg - (diff2 + delta * delta).sqrt() + delta;
+
+        // =====================================================================
+        // 4. H−O−H bending for spectator water molecules
+        // =====================================================================
+        let theta_eq = 113.0_f64.to_radians(); // Wider than 104.5° due to H₃O⁺ character
+
+        // Water 1: H₁a-O₁-H₁b
+        let theta1 = Self::angle(coords, 1, 0, 2);
+        let v_bend1 = 0.5 * self.k_bend * (theta1 - theta_eq).powi(2);
+
+        // Water 2: H₂a-O₂-H₂b  
+        let theta2 = Self::angle(coords, 5, 4, 6);
+        let v_bend2 = 0.5 * self.k_bend * (theta2 - theta_eq).powi(2);
+
+        // =====================================================================
+        // 5. H* bending: penalize displacement perpendicular to O···O axis
+        // =====================================================================
+        let perp2 = Self::perp_dist2(coords, 3, 0, 4);
+        let v_bend_star = 0.5 * self.k_bend_star * perp2;
+
+        // =====================================================================
+        // 6. Spectator H orientation: weak penalty to keep H's roughly in plane
+        // =====================================================================
+        // Angle H₁a-O₁-H* (should be ~109°)
+        let theta_s1a = Self::angle(coords, 1, 0, 3);
+        let theta_s1b = Self::angle(coords, 2, 0, 3);
+        let theta_s2a = Self::angle(coords, 5, 4, 3);
+        let theta_s2b = Self::angle(coords, 6, 4, 3);
+        let theta_sp_eq = 109.0_f64.to_radians();
+        let k_sp = 0.02; // Weak
+        let v_sp = 0.5 * k_sp * (
+            (theta_s1a - theta_sp_eq).powi(2) + (theta_s1b - theta_sp_eq).powi(2)
+            + (theta_s2a - theta_sp_eq).powi(2) + (theta_s2b - theta_sp_eq).powi(2)
+        );
+
+        v_oo + v_spectator + v_shared + v_bend1 + v_bend2 + v_bend_star + v_sp
+    }
+
+    fn masses(&self) -> &[f64] {
+        &self.masses_arr
+    }
+
+    fn reference_geometry(&self) -> Vec<f64> {
+        // Zundel cation: H₂O···H⁺···OH₂
+        // O₁ at origin, O₂ along x-axis at r_oo
+        // H* near O₁ (starting in left well)
+        // Spectator H atoms in yz-plane
+        let r_oo = self.r_oo_eq;
+        let r_oh = self.r_oh_eq;
+        let r_ohs = self.r_oh_star_eq;
+
+        let theta = 113.0_f64.to_radians();
+        let half_angle = theta / 2.0;
+
+        // Spectator H positions relative to their O
+        let hy = r_oh * half_angle.sin();
+        let hx_off = r_oh * half_angle.cos();
+
+        vec![
+            // O₁ (atom 0)
+            0.0, 0.0, 0.0,
+            // H₁a (atom 1) — spectator on water 1, tilted in -x,+y
+            -hx_off, hy, 0.0,
+            // H₁b (atom 2) — spectator on water 1, tilted in -x,-y
+            -hx_off, -hy, 0.0,
+            // H* (atom 3) — shared proton, near O₁
+            r_ohs, 0.0, 0.0,
+            // O₂ (atom 4) — acceptor oxygen
+            r_oo, 0.0, 0.0,
+            // H₂a (atom 5) — spectator on water 2, tilted in +x,+z
+            r_oo + hx_off, 0.0, hy,
+            // H₂b (atom 6) — spectator on water 2, tilted in +x,-z
+            r_oo + hx_off, 0.0, -hy,
+        ]
+    }
+
+    fn name(&self) -> &'static str {
+        "Zundel Cation H₅O₂⁺ (H₂O···H⁺···OH₂)"
+    }
+}
+
+// =============================================================================
+// Zundel Cation Simulation Driver
+// =============================================================================
+
+/// Run PIMD simulation for proton transfer in the Zundel cation H₅O₂⁺.
+///
+/// Compares classical (P=1) and quantum (P=n_beads) behavior.
+/// The shared proton (atom 3) transfers between O₁ (atom 0) and O₂ (atom 4).
+pub fn run_pimd_zundel(
+    n_polymers: usize,
+    n_beads: usize,
+    beta: f64,
+    dt: f64,
+    n_equilibrate: usize,
+    n_production: usize,
+) {
+    let pes = ZundelPES::new();
+
+    // Transfer coordinate: O₁ is donor (0), H* is proton (3), O₂ is acceptor (4)
+    let donor = 0_usize;
+    let proton = 3_usize;
+    let acceptor = 4_usize;
+
+    let temp_k = 315774.65 / beta;
+
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║    Multi-Atom PIMD — Zundel Cation H₅O₂⁺                  ║");
+    println!("║    H₂O − H⁺ ··· OH₂  ↔  H₂O ··· H⁺ − OH₂               ║");
+    println!("║    7 atoms, 21 DOF, PILE Thermostat                        ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("System: {} — 7 atoms, 21 DOF", pes.name());
+    println!("  O mass:  {:.2} a.u.", pes.masses_arr[0]);
+    println!("  H mass:  {:.2} a.u.", pes.masses_arr[1]);
+    println!("  O···O eq: {:.4} Bohr ({:.4} Å)", pes.r_oo_eq, pes.r_oo_eq * 0.529177);
+    println!("  O−H eq:   {:.4} Bohr ({:.4} Å)", pes.r_oh_eq, pes.r_oh_eq * 0.529177);
+    println!("  O−H* eq:  {:.4} Bohr ({:.4} Å)", pes.r_oh_star_eq, pes.r_oh_star_eq * 0.529177);
+    println!("  Barrier:  {:.6} Ha ({:.2} kcal/mol)", pes.barrier_height, pes.barrier_height * 627.509);
+    println!("  Temp:     {:.1} K (β = {:.2} a.u.)", temp_k, beta);
+    println!();
+    println!("Simulation: P={}, replicas={}, dt={:.4}, equil={}, prod={}",
+             n_beads, n_polymers, dt, n_equilibrate, n_production);
+    println!();
+
+    let gamma = 0.001;
+
+    // =========================================================================
+    // Classical (P=1)
+    // =========================================================================
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Running CLASSICAL simulation (P = 1)...");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    let mut cl_sim = MolecularPIMD::new(n_polymers, 1, beta, dt, gamma, pes.clone());
+
+    for step in 0..n_equilibrate {
+        cl_sim.step_obabo();
+        if step % (n_equilibrate / 4).max(1) == 0 {
+            let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
+            println!("  Equil {:6}: E = {:10.6}, δ = {:8.5}", step, cl_sim.average_virial_energy(), tc);
+        }
+    }
+    println!();
+
+    let sample_interval = 10;
+    let n_hist_bins = 200;
+    let hist_min = -2.5;
+    let hist_max = 2.5;
+    let hist_bw = (hist_max - hist_min) / n_hist_bins as f64;
+
+    let mut cl_e = Vec::new();
+    let mut cl_tc = Vec::new();
+    let mut cl_hist = vec![0.0; n_hist_bins];
+    let mut cl_tun_sum = 0.0;
+    let mut cl_tun_n = 0;
+
+    for step in 0..n_production {
+        cl_sim.step_obabo();
+        if step % sample_interval == 0 {
+            cl_e.push(cl_sim.average_virial_energy());
+            cl_tc.push(cl_sim.average_transfer_coordinate(donor, proton, acceptor));
+            cl_tun_sum += cl_sim.tunneling_fraction(donor, proton, acceptor);
+            cl_tun_n += 1;
+            cl_sim.accumulate_transfer_histogram(&mut cl_hist, hist_min, hist_max, donor, proton, acceptor);
+        }
+        if step % (n_production / 5).max(1) == 0 {
+            let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
+            println!("  Prod {:6}: E = {:10.6}, δ = {:8.5}, tunnel = {:.2}%",
+                     step, cl_sim.average_virial_energy(), tc,
+                     100.0 * cl_sim.tunneling_fraction(donor, proton, acceptor));
+        }
+    }
+
+    let cl_n = cl_e.len() as f64;
+    let cl_mean_e = cl_e.iter().sum::<f64>() / cl_n;
+    let cl_mean_tc = cl_tc.iter().sum::<f64>() / cl_n;
+    let cl_tunnel = cl_tun_sum / cl_tun_n as f64;
+
+    println!();
+    println!("  Classical: E = {:.6} Ha, <δ> = {:.5}, tunnel = {:.2}%",
+             cl_mean_e, cl_mean_tc, 100.0 * cl_tunnel);
+
+    // =========================================================================
+    // Quantum (P = n_beads)
+    // =========================================================================
+    println!();
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Running QUANTUM simulation (P = {})...", n_beads);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    let mut q_sim = MolecularPIMD::new(n_polymers, n_beads, beta, dt, gamma, pes.clone());
+
+    for step in 0..n_equilibrate {
+        q_sim.step_obabo();
+        if step % (n_equilibrate / 4).max(1) == 0 {
+            let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
+            let rg = q_sim.average_atom_rg(proton);
+            println!("  Equil {:6}: E = {:10.6}, δ = {:8.5}, R_g(H*) = {:8.5}",
+                     step, q_sim.average_virial_energy(), tc, rg);
+        }
+    }
+    println!();
+
+    let mut q_e = Vec::new();
+    let mut q_tc = Vec::new();
+    let mut q_rg = Vec::new();
+    let mut q_hist = vec![0.0; n_hist_bins];
+    let mut q_tun_sum = 0.0;
+    let mut q_tun_n = 0;
+
+    for step in 0..n_production {
+        q_sim.step_obabo();
+        if step % sample_interval == 0 {
+            q_e.push(q_sim.average_virial_energy());
+            q_tc.push(q_sim.average_transfer_coordinate(donor, proton, acceptor));
+            q_rg.push(q_sim.average_atom_rg(proton));
+            q_tun_sum += q_sim.tunneling_fraction(donor, proton, acceptor);
+            q_tun_n += 1;
+            q_sim.accumulate_transfer_histogram(&mut q_hist, hist_min, hist_max, donor, proton, acceptor);
+        }
+        if step % (n_production / 5).max(1) == 0 {
+            let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
+            let rg = q_sim.average_atom_rg(proton);
+            println!("  Prod {:6}: E = {:10.6}, δ = {:8.5}, R_g(H*) = {:8.5}, tunnel = {:.2}%",
+                     step, q_sim.average_virial_energy(), tc, rg,
+                     100.0 * q_sim.tunneling_fraction(donor, proton, acceptor));
+        }
+    }
+
+    let q_n = q_e.len() as f64;
+    let q_mean_e = q_e.iter().sum::<f64>() / q_n;
+    let q_var_e = q_e.iter().map(|e| (e - q_mean_e).powi(2)).sum::<f64>() / q_n;
+    let q_stderr_e = q_var_e.sqrt() / q_n.sqrt();
+    let q_mean_tc = q_tc.iter().sum::<f64>() / q_n;
+    let q_mean_rg = q_rg.iter().sum::<f64>() / q_n;
+    let q_tunnel = q_tun_sum / q_tun_n as f64;
+
+    println!();
+    println!("  Quantum: E = {:.6} ± {:.6} Ha, <δ> = {:.5}, R_g(H*) = {:.5}, tunnel = {:.2}%",
+             q_mean_e, q_stderr_e, q_mean_tc, q_mean_rg, 100.0 * q_tunnel);
+
+    // =========================================================================
+    // Comparison Summary
+    // =========================================================================
+    println!();
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║              ZUNDEL CATION — COMPARISON                    ║");
+    println!("╠══════════════════════════════════════════════════════════════╣");
+    println!("║  {:>18} │ {:>14} │ {:>14}  ║", "Property", "Classical", "Quantum");
+    println!("║  {:>18} │ {:>14} │ {:>14}  ║", "──────────────────", "──────────────", "──────────────");
+    println!("║  {:>18} │ {:>14.6} │ {:>14.6}  ║", "E_virial (Ha)", cl_mean_e, q_mean_e);
+    println!("║  {:>18} │ {:>14.5} │ {:>14.5}  ║", "δ (Bohr)", cl_mean_tc, q_mean_tc);
+    println!("║  {:>18} │ {:>14} │ {:>14.5}  ║", "R_g(H*) (Bohr)", "N/A", q_mean_rg);
+    println!("║  {:>18} │ {:>13.2}% │ {:>13.2}%  ║", "Tunneling", 100.0 * cl_tunnel, 100.0 * q_tunnel);
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+
+    // Physical interpretation
+    if q_tunnel > cl_tunnel + 0.01 {
+        println!("  ✓ Quantum proton transfer OBSERVED in Zundel cation!");
+        println!("    The shared proton delocalizes between the two water molecules.");
+        if q_tunnel > 0.35 {
+            println!("    → Strong tunneling: proton is significantly shared between both oxygens!");
+        } else if q_tunnel > 0.15 {
+            println!("    → Moderate tunneling: clear quantum enhancement.");
+        } else {
+            println!("    → Weak but observable quantum effects.");
+        }
+    } else {
+        println!("  ○ Quantum effects are modest — try lower temperature or lower barrier.");
+    }
+
+    let zpe_diff = q_mean_e - cl_mean_e;
+    if zpe_diff > 0.001 {
+        println!("  ✓ Zero-point energy: +{:.4} Ha ({:.1} kcal/mol)", zpe_diff, zpe_diff * 627.509);
+    }
+    if q_mean_rg > 0.05 {
+        println!("  ✓ H* R_g = {:.4} Bohr → quantum delocalization of the shared proton", q_mean_rg);
+    }
+
+    // O···O distance comparison
+    let cl_roo = cl_sim.polymers.iter()
+        .map(|p| p.centroid_distance(0, 4)).sum::<f64>() / n_polymers as f64;
+    let q_roo = q_sim.polymers.iter()
+        .map(|p| p.centroid_distance(0, 4)).sum::<f64>() / n_polymers as f64;
+    println!("  O···O distance: classical = {:.4} Bohr ({:.4} Å), quantum = {:.4} Bohr ({:.4} Å)",
+             cl_roo, cl_roo * 0.529177, q_roo, q_roo * 0.529177);
+
+    // =========================================================================
+    // Output files
+    // =========================================================================
+    {
+        let file = File::create("pimd_zundel_distribution.txt").unwrap();
+        let mut w = BufWriter::new(file);
+        writeln!(w, "# delta classical_P(delta) quantum_P(delta)").unwrap();
+        let cl_total: f64 = cl_hist.iter().sum();
+        let q_total: f64 = q_hist.iter().sum();
+        for i in 0..n_hist_bins {
+            let x = hist_min + (i as f64 + 0.5) * hist_bw;
+            let cp = if cl_total > 0.0 { cl_hist[i] / (cl_total * hist_bw) } else { 0.0 };
+            let qp = if q_total > 0.0 { q_hist[i] / (q_total * hist_bw) } else { 0.0 };
+            writeln!(w, "{:.6} {:.6} {:.6}", x, cp, qp).unwrap();
+        }
+        println!();
+        println!("  Transfer coord distribution → pimd_zundel_distribution.txt");
+    }
+    {
+        let file = File::create("pimd_zundel_energy.txt").unwrap();
+        let mut w = BufWriter::new(file);
+        writeln!(w, "# sample E_cl E_q delta_cl delta_q R_g_H").unwrap();
+        let n = q_e.len().min(cl_e.len());
+        for i in 0..n {
+            writeln!(w, "{} {:.6} {:.6} {:.6} {:.6} {:.6}",
+                     i, cl_e[i], q_e[i], cl_tc[i], q_tc[i], q_rg[i]).unwrap();
+        }
+        println!("  Energy trajectory → pimd_zundel_energy.txt");
+    }
+    {
+        let file = File::create("pimd_zundel_beads.txt").unwrap();
+        let mut w = BufWriter::new(file);
+        writeln!(w, "# polymer bead atom x y z").unwrap();
+        for (pi, polymer) in q_sim.polymers.iter().enumerate() {
+            for (bi, bead) in polymer.positions.iter().enumerate() {
+                for a in 0..7 {
+                    writeln!(w, "{} {} {} {:.6} {:.6} {:.6}",
+                             pi, bi, a, bead[3*a], bead[3*a+1], bead[3*a+2]).unwrap();
+                }
+            }
+        }
+        println!("  Bead snapshot → pimd_zundel_beads.txt");
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     /// Simple 3D harmonic potential for testing
     #[derive(Clone)]
@@ -1163,5 +1683,57 @@ mod tests {
         // Centroid should exist and be finite
         assert!(cent.iter().all(|&c| c.is_finite()), "Centroid should be finite");
         assert_eq!(cent.len(), 9); // 3 atoms × 3D
+    }
+
+    #[test]
+    fn test_zundel_double_well() {
+        let pes = ZundelPES::new();
+        let r_oo = pes.r_oo_eq;
+        let ref_geom = pes.reference_geometry();
+
+        // Energy at reference (H* near O₁)
+        let e_left = pes.energy(&ref_geom);
+
+        // Energy with H* at midpoint (transition state)
+        let mut geom_ts = ref_geom.clone();
+        geom_ts[3 * 3] = r_oo / 2.0; // H* x = midpoint
+        let e_ts = pes.energy(&geom_ts);
+
+        // Energy with H* near O₂ (right well)
+        let mut geom_right = ref_geom.clone();
+        geom_right[3 * 3] = r_oo - pes.r_oh_star_eq;
+        let e_right = pes.energy(&geom_right);
+
+        // Barrier should be above both minima
+        assert!(e_ts > e_left, "TS ({:.6}) should be above left ({:.6})", e_ts, e_left);
+        assert!(e_ts > e_right, "TS ({:.6}) should be above right ({:.6})", e_ts, e_right);
+
+        // Wells should be roughly symmetric
+        assert!((e_left - e_right).abs() < 0.01,
+                "Zundel wells should be ~symmetric: left={:.6}, right={:.6}", e_left, e_right);
+    }
+
+    #[test]
+    fn test_zundel_force_consistency() {
+        let pes = ZundelPES::new();
+        let geom = pes.reference_geometry();
+        let ndof = pes.ndof();
+
+        let mut forces = vec![0.0; ndof];
+        pes.forces(&geom, &mut forces);
+
+        let h = 1e-5;
+        let mut gp = geom.clone();
+        let mut gm = geom.clone();
+        for d in 0..ndof {
+            gp[d] = geom[d] + h;
+            gm[d] = geom[d] - h;
+            let f_num = -(pes.energy(&gp) - pes.energy(&gm)) / (2.0 * h);
+            gp[d] = geom[d];
+            gm[d] = geom[d];
+
+            assert!((forces[d] - f_num).abs() < 1e-3,
+                    "Zundel force mismatch at dof {}: {:.8} vs {:.8}", d, forces[d], f_num);
+        }
     }
 }
