@@ -1151,13 +1151,13 @@ impl ZundelPES {
 
             // Intermolecular
             r_oo_eq: 4.535,             // 2.40 Å
-            rep_a: 2.5,
-            rep_b: 1.8,
-            q_o_w: -0.82,              // SPC/E-like charges
-            q_h_w: 0.41,
-            q_o_h: -0.50,              // H₃O⁺ charges (total +1)
-            q_h_h: 0.50,
-            screen: 0.5,
+            rep_a: 0.8,                 // O-O short-range repulsion
+            rep_b: 1.5,
+            q_o_w: -0.20,              // Reduced charges — EVB correction only
+            q_h_w: 0.10,
+            q_o_h: -0.10,             
+            q_h_h: 0.10,
+            screen: 1.5,               // Strong screening to prevent divergence
             k_perp: 0.03,
 
             masses_arr: [m_o, m_h, m_h, m_h, m_o, m_h, m_h],
@@ -1362,6 +1362,7 @@ pub fn run_pimd_zundel(
     println!("  O−H(H₃O⁺): {:.4} Bohr ({:.4} Å)", pes.r_oh_h3o, pes.r_oh_h3o * 0.529177);
     println!("  EVB coupling: A={:.4} Ha, μ={:.3} /Bohr", pes.coupling_a, pes.coupling_mu);
     println!("  PES type: Empirical Valence Bond (2-state)");
+    println!("  Temp:     {:.1} K (β = {:.2} a.u.)", temp_k, beta);
     println!();
     println!("Simulation: P={}, replicas={}, dt={:.4}, equil={}, prod={}",
              n_beads, n_polymers, dt, n_equilibrate, n_production);
@@ -1725,7 +1726,7 @@ mod tests {
 
         // Energy with H* near O₂ (right well)
         let mut geom_right = ref_geom.clone();
-        geom_right[3 * 3] = r_oo - pes.r_oh_star_eq;
+        geom_right[3 * 3] = r_oo - pes.r_oh_h3o;
         let e_right = pes.energy(&geom_right);
 
         // Barrier should be above both minima
