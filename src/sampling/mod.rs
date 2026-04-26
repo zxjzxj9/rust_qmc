@@ -37,7 +37,7 @@ pub use pimd::{
 pub use pimd_molecular::{
     MolecularPotential, MolecularRingPolymer, MolecularPILE, MolecularPIMD,
     BifluoridePES, run_pimd_bifluoride,
-    ZundelPES, run_pimd_zundel,
+    ZundelPES, run_pimd_zundel, free_energy_profile,
 };
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
 pub use force_variance::ForceEstimator;
