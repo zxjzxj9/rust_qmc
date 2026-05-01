@@ -114,16 +114,13 @@ fn main() {
 
     let pes = ZundelPES::new();
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║    H/D/T Kinetic Isotope Effect — Zundel Cation H₅O₂⁺    ║");
-    println!("║                                                             ║");
-    println!("║    Comparing: H* (1836 a.u.) vs D* (3672 a.u.)            ║");
-    println!("║               vs T* (5498 a.u.)                            ║");
-    println!("║                                                             ║");
-    println!("║    At temperatures: {:?}                      ║", 
-             temperatures.iter().map(|t| format!("{}K", *t as u32)).collect::<Vec<_>>().join(", "));
-    println!("║    Beads: {}, Replicas: {}                              ║", n_beads, n_polymers);
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    let temp_str = temperatures.iter().map(|t| format!("{}K", *t as u32)).collect::<Vec<_>>().join(", ");
+    println!("==============================================================");
+    println!("  H/D/T Kinetic Isotope Effect -- Zundel Cation H5O2+");
+    println!("  Comparing: H* (1836 a.u.) vs D* (3672 a.u.) vs T* (5498 a.u.)");
+    println!("  At temperatures: {}", temp_str);
+    println!("  Beads: {}, Replicas: {}", n_beads, n_polymers);
+    println!("==============================================================");
     println!();
 
     let n_bins = 200;
@@ -176,24 +173,24 @@ fn main() {
         let fwhm_d = distribution_width(&d_result.histogram, hist_min, hist_bw);
         let fwhm_t = distribution_width(&t_result.histogram, hist_min, hist_bw);
 
-        println!("  ┌──────────────────────────────────────────────────────┐");
-        println!("  │  T = {} K — Isotope Comparison                     │", temp as u32);
-        println!("  ├────────────┬──────────┬──────────┬──────────┤");
-        println!("  │  Property  │    H*    │    D*    │    T*    │");
-        println!("  ├────────────┼──────────┼──────────┼──────────┤");
-        println!("  │ Mass (a.u.)│ {:>8.1} │ {:>8.1} │ {:>8.1} │", m_h, m_d, m_t);
-        println!("  │ E (Ha)     │ {:>8.5} │ {:>8.5} │ {:>8.5} │",
+        println!();
+        println!("  T = {} K -- Isotope Comparison", temp as u32);
+        println!("  +-----------+----------+----------+----------+");
+        println!("  | Property  |    H*    |    D*    |    T*    |");
+        println!("  +-----------+----------+----------+----------+");
+        println!("  | Mass(a.u.)|{:>9.1} |{:>9.1} |{:>9.1} |", m_h, m_d, m_t);
+        println!("  | E (Ha)    |{:>9.5} |{:>9.5} |{:>9.5} |",
                  h_result.mean_energy, d_result.mean_energy, t_result.mean_energy);
-        println!("  │ R_g (Bohr) │ {:>8.5} │ {:>8.5} │ {:>8.5} │",
+        println!("  | R_g(Bohr) |{:>9.5} |{:>9.5} |{:>9.5} |",
                  h_result.mean_rg, d_result.mean_rg, t_result.mean_rg);
-        println!("  │ Tunnel (%) │ {:>8.1} │ {:>8.1} │ {:>8.1} │",
+        println!("  | Tunnel(%) |{:>9.1} |{:>9.1} |{:>9.1} |",
                  100.0 * h_result.tunnel_frac, 100.0 * d_result.tunnel_frac,
                  100.0 * t_result.tunnel_frac);
-        println!("  │ <δ> (Bohr) │ {:>8.5} │ {:>8.5} │ {:>8.5} │",
+        println!("  | <d>(Bohr) |{:>9.5} |{:>9.5} |{:>9.5} |",
                  h_result.mean_tc, d_result.mean_tc, t_result.mean_tc);
-        println!("  │ FWHM(Bohr) │ {:>8.3} │ {:>8.3} │ {:>8.3} │",
+        println!("  | FWHM(Bohr)|{:>9.3} |{:>9.3} |{:>9.3} |",
                  fwhm_h, fwhm_d, fwhm_t);
-        println!("  └────────────┴──────────┴──────────┴──────────┘");
+        println!("  +-----------+----------+----------+----------+");
 
         // Isotope effects
         let zpe_hd = h_result.mean_energy - d_result.mean_energy;
@@ -203,13 +200,13 @@ fn main() {
 
         println!();
         println!("  Isotope effects at {} K:", temp as u32);
-        println!("    ΔZPE(H-D) = {:.4} Ha ({:.2} kcal/mol)",
+        println!("    dZPE(H-D) = {:.4} Ha ({:.2} kcal/mol)",
                  zpe_hd, zpe_hd * 627.509);
-        println!("    ΔZPE(H-T) = {:.4} Ha ({:.2} kcal/mol)",
+        println!("    dZPE(H-T) = {:.4} Ha ({:.2} kcal/mol)",
                  zpe_ht, zpe_ht * 627.509);
-        println!("    R_g(H)/R_g(D) = {:.3}  (theory: √(m_D/m_H) = {:.3})",
+        println!("    R_g(H)/R_g(D) = {:.3}  (theory: sqrt(m_D/m_H) = {:.3})",
                  rg_ratio_hd, (m_d / m_h).sqrt());
-        println!("    R_g(H)/R_g(T) = {:.3}  (theory: √(m_T/m_H) = {:.3})",
+        println!("    R_g(H)/R_g(T) = {:.3}  (theory: sqrt(m_T/m_H) = {:.3})",
                  rg_ratio_ht, (m_t / m_h).sqrt());
         if h_result.tunnel_frac > 0.01 && d_result.tunnel_frac > 0.01 {
             println!("    KIE(H/D) tunnel ratio = {:.2}",
@@ -227,42 +224,41 @@ fn main() {
     // Grand Summary
     // =========================================================================
     println!();
-    println!("╔══════════════════════════════════════════════════════════════════════════════════════╗");
-    println!("║                     GRAND ISOTOPE EFFECT SUMMARY                                   ║");
-    println!("╠══════════════════════════════════════════════════════════════════════════════════════╣");
-    println!("║  T (K)  │ R_g(H) │ R_g(D) │ R_g(T) │ H/D ratio │ Tun(H) │ Tun(D) │ ΔZPE H-D     ║");
-    println!("║─────────┼────────┼────────┼────────┼───────────┼────────┼────────┼──────────────║");
+    println!("=====================================================================================");
+    println!("                        GRAND ISOTOPE EFFECT SUMMARY");
+    println!("=====================================================================================");
+    println!("  T (K)  | R_g(H) | R_g(D) | R_g(T) | H/D ratio | Tun(H) | Tun(D) | dZPE H-D     ");
+    println!("---------|--------|--------|--------|-----------|--------|--------|-------------");
 
     for (temp, results) in &all_results {
         let h = &results[0];
         let d = &results[1];
-        let t = &results[2];
+        let _t = &results[2];
         let ratio = h.mean_rg / d.mean_rg.max(0.001);
         let zpe = (h.mean_energy - d.mean_energy) * 627.509;
-        println!("║  {:>5}  │ {:>6.4} │ {:>6.4} │ {:>6.4} │   {:>5.3}   │ {:>5.1}% │ {:>5.1}% │ {:>8.2} kcal ║",
+        println!("  {:>5}  | {:>6.4} | {:>6.4} | {:>6.4} |   {:>5.3}   | {:>5.1}% | {:>5.1}% | {:>8.2} kcal",
                  *temp as u32,
-                 h.mean_rg, d.mean_rg, t.mean_rg,
+                 h.mean_rg, d.mean_rg, results[2].mean_rg,
                  ratio,
                  100.0 * h.tunnel_frac, 100.0 * d.tunnel_frac,
                  zpe);
     }
-    println!("╚══════════════════════════════════════════════════════════════════════════════════════╝");
+    println!("=====================================================================================");
 
     println!();
-    println!("═══ CONCLUSIONS ═══");
+    println!("=== CONCLUSIONS ===");
     println!();
     println!("  1. DELOCALIZATION: R_g(H) > R_g(D) > R_g(T) at all temperatures.");
-    println!("     The lighter isotope has a larger quantum spread (de Broglie wavelength ∝ 1/√m).");
+    println!("     The lighter isotope has a larger quantum spread (de Broglie wavelength ~ 1/sqrt(m)).");
     println!();
 
     // Check the R_g scaling
     if let Some((_, results)) = all_results.first() {
         let h = &results[0];
         let d = &results[1];
-        let t = &results[2];
         let ratio_hd = h.mean_rg / d.mean_rg.max(0.001);
         let expected_hd = (m_d / m_h).sqrt();
-        println!("  2. MASS SCALING: R_g(H)/R_g(D) = {:.3} (measured) vs √(m_D/m_H) = {:.3} (free particle).",
+        println!("  2. MASS SCALING: R_g(H)/R_g(D) = {:.3} (measured) vs sqrt(m_D/m_H) = {:.3} (free particle).",
                  ratio_hd, expected_hd);
         if ratio_hd < expected_hd {
             println!("     The ratio is less than the free-particle value because the confining");
@@ -276,9 +272,9 @@ fn main() {
         let zpe_hd = (results[0].mean_energy - results[1].mean_energy) * 627.509;
         println!("  3. ZERO-POINT ENERGY: H has {:.1} kcal/mol MORE ZPE than D at {} K.",
                  zpe_hd, *temp as u32);
-        println!("     This is because ω(H) = ω₀/√m_H > ω(D) = ω₀/√m_D,");
-        println!("     so ZPE(H) = ½ℏω(H) > ZPE(D) = ½ℏω(D).");
-        println!("     Expected ratio: ZPE(H)/ZPE(D) = √(m_D/m_H) = {:.3}", (m_d / m_h).sqrt());
+        println!("     This is because w(H) = w0/sqrt(m_H) > w(D) = w0/sqrt(m_D),");
+        println!("     so ZPE(H) = 0.5*hbar*w(H) > ZPE(D) = 0.5*hbar*w(D).");
+        println!("     Expected ratio: ZPE(H)/ZPE(D) = sqrt(m_D/m_H) = {:.3}", (m_d / m_h).sqrt());
     }
     println!();
     println!("  4. TUNNELING: H tunnels more than D at low T, but the difference vanishes");
