@@ -2005,58 +2005,58 @@ pub fn run_pimd_zundel(
     let kbt = 1.0 / beta; // k_B T in Hartree
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║                    ZUNDEL CATION — FULL COMPARISON                 ║");
-    println!("╠══════════════════════════════════════════════════════════════════════╣");
-    println!("║  {:>18} │ {:>12} │ {:>12} │ {:>12}  ║", "Property", "Classical", "Quantum(H)", "Quantum(D)");
-    println!("║  {:>18} │ {:>12} │ {:>12} │ {:>12}  ║", "──────────────────", "────────────", "────────────", "────────────");
-    println!("║  {:>18} │ {:>12.6} │ {:>12.6} │ {:>12.6}  ║", "E_virial (Ha)", cl_mean_e, q_mean_e, d_mean_e);
-    println!("║  {:>18} │ {:>12.5} │ {:>12.5} │ {:>12}  ║", "<δ> (Bohr)", cl_mean_tc, q_mean_tc, "—");
-    println!("║  {:>18} │ {:>12} │ {:>12.5} │ {:>12.5}  ║", "R_g(H*) (Bohr)", "N/A", q_mean_rg, d_mean_rg);
-    println!("║  {:>18} │ {:>12} │ {:>12.5} │ {:>12}  ║", "R_g∥ (Bohr)", "N/A", q_mean_rg_par, "—");
-    println!("║  {:>18} │ {:>12} │ {:>12.5} │ {:>12}  ║", "R_g⊥ (Bohr)", "N/A", q_mean_rg_perp, "—");
-    println!("║  {:>18} │ {:>12.4} │ {:>12.4} │ {:>12}  ║", "R_OO (Bohr)", cl_roo, q_mean_roo, "—");
-    println!("║  {:>18} │ {:>11.2}% │ {:>11.2}% │ {:>11.2}%  ║", "Tunneling", 100.0*cl_tunnel, 100.0*q_tunnel, 100.0*d_tunnel);
-    println!("╚══════════════════════════════════════════════════════════════════════╝");
+    println!("======================================================================");
+    println!("                  ZUNDEL CATION -- FULL COMPARISON");
+    println!("======================================================================");
+    println!("  {:>18} | {:>12} | {:>12} | {:>12}", "Property", "Classical", "Quantum(H)", "Quantum(D)");
+    println!("  {:>18} | {:>12} | {:>12} | {:>12}", "------------------", "------------", "------------", "------------");
+    println!("  {:>18} | {:>12.6} | {:>12.6} | {:>12.6}", "E_virial (Ha)", cl_mean_e, q_mean_e, d_mean_e);
+    println!("  {:>18} | {:>12.5} | {:>12.5} | {:>12}", "<d> (Bohr)", cl_mean_tc, q_mean_tc, "--");
+    println!("  {:>18} | {:>12} | {:>12.5} | {:>12.5}", "R_g(H*) (Bohr)", "N/A", q_mean_rg, d_mean_rg);
+    println!("  {:>18} | {:>12} | {:>12.5} | {:>12}", "R_g_par (Bohr)", "N/A", q_mean_rg_par, "--");
+    println!("  {:>18} | {:>12} | {:>12.5} | {:>12}", "R_g_perp (Bohr)", "N/A", q_mean_rg_perp, "--");
+    println!("  {:>18} | {:>12.4} | {:>12.4} | {:>12}", "R_OO (Bohr)", cl_roo, q_mean_roo, "--");
+    println!("  {:>18} | {:>11.2}% | {:>11.2}% | {:>11.2}%", "Tunneling", 100.0*cl_tunnel, 100.0*q_tunnel, 100.0*d_tunnel);
+    println!("======================================================================");
     println!();
 
     // Physical interpretation
     if q_tunnel > cl_tunnel + 0.01 {
-        println!("  ✓ Quantum proton transfer OBSERVED in Zundel cation!");
+        println!("  * Quantum proton transfer OBSERVED in Zundel cation!");
         if q_tunnel > 0.35 {
-            println!("    → Strong tunneling: proton significantly shared between both oxygens!");
+            println!("    -> Strong tunneling: proton significantly shared between both oxygens!");
         } else if q_tunnel > 0.15 {
-            println!("    → Moderate tunneling: clear quantum enhancement.");
+            println!("    -> Moderate tunneling: clear quantum enhancement.");
         } else {
-            println!("    → Weak but observable quantum effects.");
+            println!("    -> Weak but observable quantum effects.");
         }
     } else {
-        println!("  ○ Quantum effects are modest — try lower temperature or lower barrier.");
+        println!("  o Quantum effects are modest -- try lower temperature or lower barrier.");
     }
 
     let zpe_diff = q_mean_e - cl_mean_e;
     if zpe_diff > 0.001 {
-        println!("  ✓ Zero-point energy: +{:.4} Ha ({:.1} kcal/mol)", zpe_diff, zpe_diff * 627.509);
+        println!("  * Zero-point energy: +{:.4} Ha ({:.1} kcal/mol)", zpe_diff, zpe_diff * 627.509);
     }
     if q_mean_rg > 0.05 {
-        println!("  ✓ H* R_g = {:.4} Bohr → quantum delocalization of the shared proton", q_mean_rg);
-        println!("    R_g∥ = {:.4} (along O-O), R_g⊥ = {:.4} (perpendicular)", q_mean_rg_par, q_mean_rg_perp);
+        println!("  * H* R_g = {:.4} Bohr -> quantum delocalization of the shared proton", q_mean_rg);
+        println!("    R_g_par = {:.4} (along O-O), R_g_perp = {:.4} (perpendicular)", q_mean_rg_par, q_mean_rg_perp);
     }
 
     // Isotope effect
     if q_tunnel > 0.01 && d_tunnel > 0.01 {
         let kie = q_tunnel / d_tunnel;
-        println!("  ✓ Kinetic isotope effect (H/D): {:.2}×", kie);
+        println!("  * Kinetic isotope effect (H/D): {:.2}x", kie);
         if kie > 1.5 {
-            println!("    → Strong isotope effect: quantum tunneling dominates!");
+            println!("    -> Strong isotope effect: quantum tunneling dominates!");
         }
     }
 
     // R_OO comparison
-    println!("  O···O: cl = {:.4} Bohr ({:.4} Å), qm = {:.4} Bohr ({:.4} Å)",
+    println!("  O...O: cl = {:.4} Bohr ({:.4} A), qm = {:.4} Bohr ({:.4} A)",
              cl_roo, cl_roo * 0.529177, q_mean_roo, q_mean_roo * 0.529177);
     if q_mean_roo < cl_roo - 0.01 {
-        println!("    → Quantum shortening of O···O distance (geometric isotope effect)");
+        println!("    -> Quantum shortening of O...O distance (geometric isotope effect)");
     }
 
     // =========================================================================
