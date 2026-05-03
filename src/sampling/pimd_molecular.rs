@@ -935,18 +935,18 @@ pub fn run_pimd_bifluoride(
     let proton = 1_usize;
     let acceptor = 2_usize;
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║    Multi-Atom PIMD — Bifluoride HF₂⁻ Proton Transfer      ║");
-    println!("║    3D Ring Polymer with PILE Thermostat                     ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("==============================================================");
+    println!("  Multi-Atom PIMD -- Bifluoride HF2- Proton Transfer");
+    println!("  3D Ring Polymer with PILE Thermostat");
+    println!("==============================================================");
     println!();
-    println!("System: F−H···F (3 atoms, 9 DOF)");
-    println!("  F mass: {:.2} a.u.", pes.masses_arr[0]);
-    println!("  H mass: {:.2} a.u.", m_h);
-    println!("  F···F eq: {:.4} Bohr ({:.4} Å)", pes.r_ff_eq, pes.r_ff_eq * 0.529177);
-    println!("  F−H eq:   {:.4} Bohr ({:.4} Å)", pes.r_fh_eq, pes.r_fh_eq * 0.529177);
+    println!("System: F-H...F (3 atoms, 9 DOF)");
+    println!("  F mass:   {:.2} a.u.", pes.masses_arr[0]);
+    println!("  H mass:   {:.2} a.u.", m_h);
+    println!("  F...F eq: {:.4} Bohr ({:.4} A)", pes.r_ff_eq, pes.r_ff_eq * 0.529177);
+    println!("  F-H eq:   {:.4} Bohr ({:.4} A)", pes.r_fh_eq, pes.r_fh_eq * 0.529177);
     println!("  Barrier:  {:.6} Hartree ({:.2} kcal/mol)", pes.barrier_height, pes.barrier_height * 627.509);
-    println!("  Temp:     {:.1} K (β = {:.2} a.u.)", 315774.65 / beta, beta);
+    println!("  Temp:     {:.1} K (beta = {:.2} a.u.)", 315774.65 / beta, beta);
     println!();
     println!("Simulation:");
     println!("  Beads: {}", n_beads);
@@ -961,9 +961,9 @@ pub fn run_pimd_bifluoride(
     // =========================================================================
     // Classical (P=1)
     // =========================================================================
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
     println!("  Running CLASSICAL simulation (P = 1)...");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
 
     let mut cl_sim = MolecularPIMD::new(n_polymers, 1, beta, dt, gamma_centroid, pes.clone());
 
@@ -971,7 +971,7 @@ pub fn run_pimd_bifluoride(
         cl_sim.step_obabo();
         if step % (n_equilibrate / 5).max(1) == 0 {
             let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
-            println!("  Equil {:6}: E_vir = {:10.6}, δ = {:8.5}",
+            println!("  Equil {:6}: E_vir = {:10.6}, d = {:8.5}",
                      step, cl_sim.average_virial_energy(), tc);
         }
     }
@@ -1000,7 +1000,7 @@ pub fn run_pimd_bifluoride(
         }
         if step % (n_production / 5).max(1) == 0 {
             let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
-            println!("  Prod {:6}: E_vir = {:10.6}, δ = {:8.5}, tunnel = {:.2}%",
+            println!("  Prod {:6}: E_vir = {:10.6}, d = {:8.5}, tunnel = {:.2}%",
                      step, cl_sim.average_virial_energy(), tc,
                      100.0 * cl_sim.tunneling_fraction(donor, proton, acceptor));
         }
@@ -1012,16 +1012,16 @@ pub fn run_pimd_bifluoride(
     let cl_tunnel = cl_tunnel_sum / cl_tunnel_n as f64;
 
     println!();
-    println!("  Classical: E = {:.6} Ha, <δ> = {:.5}, tunnel = {:.2}%",
+    println!("  Classical: E = {:.6} Ha, <d> = {:.5}, tunnel = {:.2}%",
              cl_mean_e, cl_mean_tc, 100.0 * cl_tunnel);
 
     // =========================================================================
     // Quantum (P = n_beads)
     // =========================================================================
     println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
     println!("  Running QUANTUM simulation (P = {})...", n_beads);
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
 
     let mut q_sim = MolecularPIMD::new(n_polymers, n_beads, beta, dt, gamma_centroid, pes.clone());
 
@@ -1030,7 +1030,7 @@ pub fn run_pimd_bifluoride(
         if step % (n_equilibrate / 5).max(1) == 0 {
             let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
             let rg_h = q_sim.average_atom_rg(proton);
-            println!("  Equil {:6}: E_vir = {:10.6}, δ = {:8.5}, R_g(H) = {:8.5}",
+            println!("  Equil {:6}: E_vir = {:10.6}, d = {:8.5}, R_g(H) = {:8.5}",
                      step, q_sim.average_virial_energy(), tc, rg_h);
         }
     }
@@ -1056,7 +1056,7 @@ pub fn run_pimd_bifluoride(
         if step % (n_production / 5).max(1) == 0 {
             let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
             let rg_h = q_sim.average_atom_rg(proton);
-            println!("  Prod {:6}: E_vir = {:10.6}, δ = {:8.5}, R_g(H) = {:8.5}, tunnel = {:.2}%",
+            println!("  Prod {:6}: E_vir = {:10.6}, d = {:8.5}, R_g(H) = {:8.5}, tunnel = {:.2}%",
                      step, q_sim.average_virial_energy(), tc, rg_h,
                      100.0 * q_sim.tunneling_fraction(donor, proton, acceptor));
         }
@@ -1071,36 +1071,36 @@ pub fn run_pimd_bifluoride(
     let q_tunnel = q_tunnel_sum / q_tunnel_n as f64;
 
     println!();
-    println!("  Quantum: E = {:.6} ± {:.6} Ha, <δ> = {:.5}, R_g(H) = {:.5}, tunnel = {:.2}%",
+    println!("  Quantum: E = {:.6} +/- {:.6} Ha, <d> = {:.5}, R_g(H) = {:.5}, tunnel = {:.2}%",
              q_mean_e, q_stderr_e, q_mean_tc, q_mean_rg, 100.0 * q_tunnel);
 
     // =========================================================================
     // Summary
     // =========================================================================
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║                  COMPARISON SUMMARY                        ║");
-    println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  {:>18} │ {:>14} │ {:>14}  ║", "Property", "Classical", "Quantum");
-    println!("║  {:>18} │ {:>14} │ {:>14}  ║", "──────────────────", "──────────────", "──────────────");
-    println!("║  {:>18} │ {:>14.6} │ {:>14.6}  ║", "E_virial (Ha)", cl_mean_e, q_mean_e);
-    println!("║  {:>18} │ {:>14.5} │ {:>14.5}  ║", "δ (Bohr)", cl_mean_tc, q_mean_tc);
-    println!("║  {:>18} │ {:>14} │ {:>14.5}  ║", "R_g(H) (Bohr)", "N/A", q_mean_rg);
-    println!("║  {:>18} │ {:>13.2}% │ {:>13.2}%  ║", "Tunneling", 100.0 * cl_tunnel, 100.0 * q_tunnel);
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("==============================================================");
+    println!("                    COMPARISON SUMMARY");
+    println!("==============================================================");
+    println!("  {:>18} | {:>14} | {:>14}", "Property", "Classical", "Quantum");
+    println!("  {:>18} | {:>14} | {:>14}", "------------------", "--------------", "--------------");
+    println!("  {:>18} | {:>14.6} | {:>14.6}", "E_virial (Ha)", cl_mean_e, q_mean_e);
+    println!("  {:>18} | {:>14.5} | {:>14.5}", "d (Bohr)", cl_mean_tc, q_mean_tc);
+    println!("  {:>18} | {:>14} | {:>14.5}", "R_g(H) (Bohr)", "N/A", q_mean_rg);
+    println!("  {:>18} | {:>13.2}% | {:>13.2}%", "Tunneling", 100.0 * cl_tunnel, 100.0 * q_tunnel);
+    println!("==============================================================");
     println!();
 
     if q_tunnel > cl_tunnel + 0.01 {
-        println!("  ✓ Quantum tunneling OBSERVED in HF₂⁻!");
+        println!("  * Quantum tunneling OBSERVED in HF2-!");
         println!("    Proton ring polymer delocalizes between the two fluorines.");
     }
     let zpe_diff = q_mean_e - cl_mean_e;
     if zpe_diff > 0.001 {
-        println!("  ✓ Zero-point energy: +{:.4} Ha ({:.1} kcal/mol)",
+        println!("  * Zero-point energy: +{:.4} Ha ({:.1} kcal/mol)",
                  zpe_diff, zpe_diff * 627.509);
     }
     if q_mean_rg > 0.05 {
-        println!("  ✓ Proton R_g = {:.4} Bohr → significant quantum delocalization", q_mean_rg);
+        println!("  * Proton R_g = {:.4} Bohr -> significant quantum delocalization", q_mean_rg);
     }
 
     // =========================================================================
@@ -1122,7 +1122,7 @@ pub fn run_pimd_bifluoride(
             writeln!(w, "{:.6} {:.6} {:.6}", x, cl_p, q_p).unwrap();
         }
         println!();
-        println!("  Transfer coordinate distribution → pimd_bifluoride_distribution.txt");
+        println!("  Transfer coordinate distribution -> pimd_bifluoride_distribution.txt");
     }
 
     // Energy trajectory
@@ -1136,7 +1136,7 @@ pub fn run_pimd_bifluoride(
                      i, cl_energies[i], q_energies[i],
                      cl_tc[i], q_tc[i], q_rg_h[i]).unwrap();
         }
-        println!("  Energy trajectory → pimd_bifluoride_energy.txt");
+        println!("  Energy trajectory -> pimd_bifluoride_energy.txt");
     }
 
     // Bead snapshot
@@ -1152,7 +1152,7 @@ pub fn run_pimd_bifluoride(
                 }
             }
         }
-        println!("  Bead snapshot → pimd_bifluoride_beads.txt");
+        println!("  Bead snapshot -> pimd_bifluoride_beads.txt");
     }
 }
 
@@ -1787,21 +1787,21 @@ pub fn run_pimd_zundel(
 
     let temp_k = 315774.65 / beta;
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║    Multi-Atom PIMD — Zundel Cation H₅O₂⁺                  ║");
-    println!("║    H₂O − H⁺ ··· OH₂  ↔  H₂O ··· H⁺ − OH₂               ║");
-    println!("║    7 atoms, 21 DOF, PILE Thermostat                        ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("==============================================================");
+    println!("  Multi-Atom PIMD -- Zundel Cation H5O2+");
+    println!("  H2O - H+ ... OH2  <->  H2O ... H+ - OH2");
+    println!("  7 atoms, 21 DOF, PILE Thermostat");
+    println!("==============================================================");
     println!();
-    println!("System: {} — 7 atoms, 21 DOF", pes.name());
+    println!("System: {} -- 7 atoms, 21 DOF", pes.name());
     println!("  O mass:  {:.2} a.u.", pes.masses_arr[0]);
     println!("  H mass:  {:.2} a.u.", pes.masses_arr[1]);
-    println!("  O···O eq: {:.4} Bohr ({:.4} Å)", pes.r_oo_eq, pes.r_oo_eq * 0.529177);
-    println!("  O−H(H₂O):  {:.4} Bohr ({:.4} Å)", pes.r_oh_h2o, pes.r_oh_h2o * 0.529177);
-    println!("  O−H(H₃O⁺): {:.4} Bohr ({:.4} Å)", pes.r_oh_h3o, pes.r_oh_h3o * 0.529177);
-    println!("  EVB coupling: A={:.4} Ha, μ={:.3} /Bohr", pes.coupling_a, pes.coupling_mu);
+    println!("  O...O eq: {:.4} Bohr ({:.4} A)", pes.r_oo_eq, pes.r_oo_eq * 0.529177);
+    println!("  O-H(H2O):  {:.4} Bohr ({:.4} A)", pes.r_oh_h2o, pes.r_oh_h2o * 0.529177);
+    println!("  O-H(H3O+): {:.4} Bohr ({:.4} A)", pes.r_oh_h3o, pes.r_oh_h3o * 0.529177);
+    println!("  EVB coupling: A={:.4} Ha, mu={:.3} /Bohr", pes.coupling_a, pes.coupling_mu);
     println!("  PES type: Empirical Valence Bond (2-state)");
-    println!("  Temp:     {:.1} K (β = {:.2} a.u.)", temp_k, beta);
+    println!("  Temp:     {:.1} K (beta = {:.2} a.u.)", temp_k, beta);
     println!();
     println!("Simulation: P={}, replicas={}, dt={:.4}, equil={}, prod={}",
              n_beads, n_polymers, dt, n_equilibrate, n_production);
@@ -1812,9 +1812,9 @@ pub fn run_pimd_zundel(
     // =========================================================================
     // Classical (P=1)
     // =========================================================================
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
     println!("  Running CLASSICAL simulation (P = 1)...");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
 
     let mut cl_sim = MolecularPIMD::new(n_polymers, 1, beta, dt, gamma, pes.clone());
 
@@ -1822,7 +1822,7 @@ pub fn run_pimd_zundel(
         cl_sim.step_obabo();
         if step % (n_equilibrate / 4).max(1) == 0 {
             let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
-            println!("  Equil {:6}: E = {:10.6}, δ = {:8.5}", step, cl_sim.average_virial_energy(), tc);
+            println!("  Equil {:6}: E = {:10.6}, d = {:8.5}", step, cl_sim.average_virial_energy(), tc);
         }
     }
     println!();
@@ -1850,7 +1850,7 @@ pub fn run_pimd_zundel(
         }
         if step % (n_production / 5).max(1) == 0 {
             let tc = cl_sim.average_transfer_coordinate(donor, proton, acceptor);
-            println!("  Prod {:6}: E = {:10.6}, δ = {:8.5}, tunnel = {:.2}%",
+            println!("  Prod {:6}: E = {:10.6}, d = {:8.5}, tunnel = {:.2}%",
                      step, cl_sim.average_virial_energy(), tc,
                      100.0 * cl_sim.tunneling_fraction(donor, proton, acceptor));
         }
@@ -1862,16 +1862,16 @@ pub fn run_pimd_zundel(
     let cl_tunnel = cl_tun_sum / cl_tun_n as f64;
 
     println!();
-    println!("  Classical: E = {:.6} Ha, <δ> = {:.5}, tunnel = {:.2}%",
+    println!("  Classical: E = {:.6} Ha, <d> = {:.5}, tunnel = {:.2}%",
              cl_mean_e, cl_mean_tc, 100.0 * cl_tunnel);
 
     // =========================================================================
     // Quantum (P = n_beads)
     // =========================================================================
     println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
     println!("  Running QUANTUM simulation (P = {})...", n_beads);
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
 
     let mut q_sim = MolecularPIMD::new(n_polymers, n_beads, beta, dt, gamma, pes.clone());
 
@@ -1880,7 +1880,7 @@ pub fn run_pimd_zundel(
         if step % (n_equilibrate / 4).max(1) == 0 {
             let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
             let rg = q_sim.average_atom_rg(proton);
-            println!("  Equil {:6}: E = {:10.6}, δ = {:8.5}, R_g(H*) = {:8.5}",
+            println!("  Equil {:6}: E = {:10.6}, d = {:8.5}, R_g(H*) = {:8.5}",
                      step, q_sim.average_virial_energy(), tc, rg);
         }
     }
@@ -1924,7 +1924,7 @@ pub fn run_pimd_zundel(
         if step % (n_production / 5).max(1) == 0 {
             let tc = q_sim.average_transfer_coordinate(donor, proton, acceptor);
             let rg = q_sim.average_atom_rg(proton);
-            println!("  Prod {:6}: E = {:10.6}, δ = {:8.5}, R_g(H*) = {:8.5}, tunnel = {:.2}%",
+            println!("  Prod {:6}: E = {:10.6}, d = {:8.5}, R_g(H*) = {:8.5}, tunnel = {:.2}%",
                      step, q_sim.average_virial_energy(), tc, rg,
                      100.0 * q_sim.tunneling_fraction(donor, proton, acceptor));
         }
@@ -1942,16 +1942,16 @@ pub fn run_pimd_zundel(
     let q_tunnel = q_tun_sum / q_tun_n as f64;
 
     println!();
-    println!("  Quantum: E = {:.6} ± {:.6} Ha, <δ> = {:.5}, R_g(H*) = {:.5}, tunnel = {:.2}%",
+    println!("  Quantum: E = {:.6} +/- {:.6} Ha, <d> = {:.5}, R_g(H*) = {:.5}, tunnel = {:.2}%",
              q_mean_e, q_stderr_e, q_mean_tc, q_mean_rg, 100.0 * q_tunnel);
 
     // =========================================================================
     // H/D Isotope Comparison (Deuterium run)
     // =========================================================================
     println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
     println!("  Running DEUTERIUM simulation (P = {})...", n_beads);
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("-----------------------------------------------------------");
 
     let mut pes_d = pes.clone();
     let m_d = 3672.30; // Deuterium mass in a.u.
