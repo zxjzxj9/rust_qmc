@@ -52,7 +52,7 @@ fn main() {
     println!("  b_ee = {:.4}", result.params.b_ee);
     println!("  b_en = {:.4}", result.params.b_en);
     println!();
-    println!("Final energy:    {:.4} ± ~{:.4} Ha", 
+    println!("Final energy:    {:.4} +/- ~{:.4} Ha", 
         result.final_energy, 
         (result.final_variance / 3000.0).sqrt());
     println!("Final energy:    {:.2} eV", result.final_energy * HA_TO_EV);

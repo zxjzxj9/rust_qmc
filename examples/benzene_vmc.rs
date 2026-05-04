@@ -1,4 +1,4 @@
-//! Benzene (C₆H₆) VMC Simulation
+//! Benzene (C6H6) VMC Simulation
 //! Uses 6-31G split-valence Gaussian basis with Jastrow3 correlation.
 //! Supports drift-diffusion sampling and SR optimization.
 //!
@@ -21,9 +21,9 @@ use rust_qmc::{
     SROptimizer, OptimizableWfn,
 };
 
-/// Benzene (C₆H₆) VMC Simulation
+/// Benzene (C6H6) VMC Simulation
 #[derive(Parser, Debug)]
-#[command(version, about = "VMC simulation for Benzene (C₆H₆) with 6-31G and Jastrow3")]
+#[command(version, about = "VMC simulation for Benzene (C6H6) with 6-31G and Jastrow3")]
 struct Args {
     /// Electron-electron Jastrow decay parameter
     #[arg(long, default_value_t = 1.5)]
@@ -60,7 +60,7 @@ const HA_TO_EV: f64 = 27.21138602;
 fn main() {
     let args = Args::parse();
     
-    println!("C₆H₆ Benzene VMC Simulation");
+    println!("C6H6 Benzene VMC Simulation");
     println!("============================");
     println!();
     println!("Features:");
@@ -98,7 +98,7 @@ fn main() {
         println!("\n  Optimized params: b_ee={:.4}, b_en={:.4}, a_anti={:.4}, a_para={:.4}",
             result.final_params[0], result.final_params[1],
             result.final_params[2], result.final_params[3]);
-        println!("  Optimization energy: {:.5} ± {:.4} Ha\n",
+        println!("  Optimization energy: {:.5} +/- {:.4} Ha\n",
             result.final_energy,
             (result.final_variance / 3000.0).sqrt());
         println!("----------------------------------------------------------\n");
@@ -173,8 +173,8 @@ fn print_results(
     println!();
     println!("Results:");
     println!("--------");
-    println!("Total energy:        {:.6} ± {:.6} Ha", energy, error);
-    println!("Total energy:        {:.4} ± {:.4} eV", 
+    println!("Total energy:        {:.6} +/- {:.6} Ha", energy, error);
+    println!("Total energy:        {:.4} +/- {:.4} eV", 
              energy * HA_TO_EV, error * HA_TO_EV);
     println!();
     if let Some(rate) = acceptance_rate {
@@ -192,14 +192,14 @@ fn print_results(
     
     // Energy quality assessment
     if energy < -180.0 && energy > -280.0 {
-        println!("✓ Energy is in reasonable range for C₆H₆");
+        println!("* Energy is in reasonable range for C6H6");
         let diff = (energy + 230.0).abs();
         if diff < 5.0 {
-            println!("✓ Within 5 Ha of HF/6-31G value - excellent!");
+            println!("* Within 5 Ha of HF/6-31G value - excellent!");
         } else if diff < 15.0 {
-            println!("✓ Within 15 Ha of HF/6-31G value - good accuracy!");
+            println!("* Within 15 Ha of HF/6-31G value - good accuracy!");
         } else if diff < 30.0 {
-            println!("○ Within 30 Ha of HF - reasonable, try --optimize");
+            println!("o Within 30 Ha of HF - reasonable, try --optimize");
         } else {
             println!("△ More than 30 Ha from HF - consider --optimize");
         }

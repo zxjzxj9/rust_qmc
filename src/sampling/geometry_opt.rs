@@ -22,7 +22,7 @@ pub struct GeometryOptimizer {
     pub n_walkers: usize,
     /// Number of equilibration sweeps before measurement
     pub n_equilibrate: usize,
-    /// Steepest-descent step size α (Bohr): R_I += α × F_I
+    /// Steepest-descent step size alpha (Bohr): R_I += alpha x F_I
     pub step_size: f64,
     /// Maximum number of optimization steps
     pub max_iterations: usize,
@@ -98,7 +98,7 @@ impl GeometryOptimizer {
     /// Returns (mean_forces, mean_energy, energy_error, force_variance).
     ///
     /// When using the ZV estimator, the force is:
-    ///   F_I^ZV = F_I^HF - 2(E_L - E_ref) × ∂ln|Ψ_T|/∂R_I
+    ///   F_I^ZV = F_I^HF - 2(E_L - E_ref) x ∂ln|Ψ_T|/∂R_I
     ///
     /// The Pulay correction is accumulated as a covariance and applied
     /// after all samples are collected.
@@ -146,8 +146,8 @@ impl GeometryOptimizer {
         let mut n_collected = 0usize;
         let steps_per_sample = (self.n_samples / self.n_walkers).max(1);
 
-        // ZV-specific accumulators: Σ E_L×Ω_I and Σ Ω_I
-        let mut el_omega_accum = vec![Vector3::zeros(); n_nuc]; // Σ E_L × Ω_I
+        // ZV-specific accumulators: Σ E_LxΩ_I and Σ Ω_I
+        let mut el_omega_accum = vec![Vector3::zeros(); n_nuc]; // Σ E_L x Ω_I
         let mut omega_accum = vec![Vector3::zeros(); n_nuc];    // Σ Ω_I
 
         for _ in 0..steps_per_sample {
@@ -182,7 +182,7 @@ impl GeometryOptimizer {
                 energy_accum += energy;
                 energy_sq_accum += energy * energy;
 
-                // ZV: accumulate Ω_I and E_L × Ω_I
+                // ZV: accumulate Ω_I and E_L x Ω_I
                 if use_zv {
                     let omega = wfn.wfn_nuclear_gradient(pos);
                     for (i, o) in omega.iter().enumerate() {
@@ -202,8 +202,8 @@ impl GeometryOptimizer {
 
         // Compute mean forces
         let mean_forces: Vec<Vector3<f64>> = if use_zv {
-            // ZV force = <F_HF> - 2 × Cov(E_L, Ω)
-            //          = <F_HF> - 2 × (<E_L × Ω> - <E_L> × <Ω>)
+            // ZV force = <F_HF> - 2 x Cov(E_L, Ω)
+            //          = <F_HF> - 2 x (<E_L x Ω> - <E_L> x <Ω>)
             (0..n_nuc).map(|i| {
                 let mean_f_hf = force_accum[i] / n;
                 let mean_el_omega = el_omega_accum[i] / n;
@@ -247,7 +247,7 @@ impl GeometryOptimizer {
             println!("  Nuclei:           {}", n_nuc);
             println!("  Samples/iter:     {}", self.n_samples);
             println!("  Walkers:          {}", self.n_walkers);
-            println!("  Step size α:      {:.4} Bohr", self.step_size);
+            println!("  Step size alpha:      {:.4} Bohr", self.step_size);
             println!("  Force threshold:  {:.4} Ha/Bohr", self.force_threshold);
             println!("  Force estimator:  {}", self.force_estimator);
             println!("  Max iterations:   {}", self.max_iterations);
@@ -267,7 +267,7 @@ impl GeometryOptimizer {
             force_history.push(max_force);
 
             if self.verbose {
-                println!("  Step {:3}: E = {:10.5} ± {:.4} Ha, max|F| = {:.4} Ha/Bohr",
+                println!("  Step {:3}: E = {:10.5} +/- {:.4} Ha, max|F| = {:.4} Ha/Bohr",
                     iter + 1, mean_energy, error, max_force);
                 if self.verbose && iter < 5 {
                     // Print individual forces and variance for first few steps
@@ -287,7 +287,7 @@ impl GeometryOptimizer {
                 break;
             }
 
-            // Steepest descent: R_I += α × F_I
+            // Steepest descent: R_I += alpha x F_I
             let mut nuclei = wfn.get_nuclei();
             let charges = wfn.get_charges();
             

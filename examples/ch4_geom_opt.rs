@@ -41,7 +41,7 @@ fn main() {
     println!("\nBond lengths:");
     for i in 1..5 {
         let d = (distorted[i] - distorted[0]).norm();
-        println!("  C-H{}: {:.4} Bohr ({:.4} Å)", i, d, d * BOHR_TO_ANG);
+        println!("  C-H{}: {:.4} Bohr ({:.4} A)", i, d, d * BOHR_TO_ANG);
     }
     println!();
 
@@ -64,7 +64,7 @@ fn main() {
     println!("\nFinal bond lengths:");
     for i in 1..5 {
         let d = (result.final_nuclei[i] - result.final_nuclei[0]).norm();
-        println!("  C-H{}: {:.4} Bohr ({:.4} Å)", i, d, d * BOHR_TO_ANG);
+        println!("  C-H{}: {:.4} Bohr ({:.4} A)", i, d, d * BOHR_TO_ANG);
     }
 
     if result.energy_history.len() > 1 {

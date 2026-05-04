@@ -56,7 +56,7 @@ impl LatticeVector {
             a/2.0, a/2.0, 0.0
         );
 
-        // Calculate reciprocal lattice vectors: b_i = 2π (a_j × a_k) / V
+        // Calculate reciprocal lattice vectors: b_i = 2π (a_j x a_k) / V
         let volume = lattice.determinant();
         let reciprocal = 2.0 * std::f64::consts::PI / volume *
             Matrix3::new(
@@ -398,7 +398,7 @@ pub fn run_vmc_sampling<T: VmcWalker>() {
 
     println!("VMC Results:");
     println!("Acceptance ratio: {:.4}", acceptance_ratio);
-    println!("Mean energy: {:.6} ± {:.6}", mean_energy, std_error);
+    println!("Mean energy: {:.6} +/- {:.6}", mean_energy, std_error);
 
     // Save results
     let file = File::create("vmc_energies.txt").unwrap();

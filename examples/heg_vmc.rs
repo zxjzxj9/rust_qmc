@@ -12,7 +12,7 @@
 //!   -j, --jastrow <F>       Jastrow parameter F [default: 1.25*rs]
 //!   -s, --steps <N>         Number of VMC steps [default: 100000]
 //!   -w, --walkers <N>       Number of walkers [default: 10]
-//!   -t, --twists <N>        Monkhorst-Pack grid size for TABC (N×N×N) [default: 1]
+//!   -t, --twists <N>        Monkhorst-Pack grid size for TABC (NxNxN) [default: 1]
 
 use clap::Parser;
 use rust_qmc::{HomogeneousElectronGas, JastrowForm, MCMCParams, MCMCSimulation};
@@ -41,7 +41,7 @@ struct Args {
     #[arg(short = 'w', long, default_value_t = 10)]
     walkers: usize,
 
-    /// Monkhorst-Pack grid size for twist-averaging (N×N×N twists)
+    /// Monkhorst-Pack grid size for twist-averaging (NxNxN twists)
     #[arg(short = 't', long, default_value_t = 1)]
     twists: usize,
 
@@ -94,7 +94,7 @@ fn main() {
         }
     };
 
-    // Form-specific default F values (optimized for rs≈4)
+    // Form-specific default F values (optimized for rs~4)
     let default_f = match jastrow_form {
         JastrowForm::Pade => 5.5,
         JastrowForm::RPA => 7.0,
@@ -102,13 +102,13 @@ fn main() {
     };
     let jastrow_f = args.jastrow.unwrap_or(default_f);
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║     Homogeneous Electron Gas (HEG) VMC Simulation            ║");
-    println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║                                                              ║");
-    println!("║  System for LDA Correlation Energy Parameterization          ║");
-    println!("║                                                              ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|     Homogeneous Electron Gas (HEG) VMC Simulation            |");
+    println!("================================================================");
+    println!("|                                                              |");
+    println!("|  System for LDA Correlation Energy Parameterization          |");
+    println!("|                                                              |");
+    println!("================================================================");
     println!();
 
     // Generate Monkhorst-Pack twist grid
@@ -119,7 +119,7 @@ fn main() {
     let heg_display = HomogeneousElectronGas::new_with_form(args.electrons, args.rs, jastrow_f, jastrow_form);
 
     println!("Simulation Parameters:");
-    println!("══════════════════════");
+    println!("======================");
     println!("  Electrons (N):       {}", args.electrons);
     println!("  Spin up / down:      {} / {}", heg_display.num_up, heg_display.num_down);
     println!("  Wigner-Seitz rs:     {:.2} Bohr", args.rs);
@@ -130,7 +130,7 @@ fn main() {
     println!("  Jastrow form:        {:?}", jastrow_form);
     println!("  VMC walkers:         {}", args.walkers);
     println!("  VMC steps:           {}", args.steps);
-    println!("  Twist grid:          {}×{}×{} = {} twists", 
+    println!("  Twist grid:          {}x{}x{} = {} twists", 
         args.twists, args.twists, args.twists, num_twists);
     println!();
 
@@ -139,7 +139,7 @@ fn main() {
     let e_c_ref = ceperley_alder_correlation(args.rs);
     
     println!("Reference Values:");
-    println!("═════════════════");
+    println!("=================");
     println!("  Hartree-Fock E/N:    {:.6} Ha ({:.4} eV)", e_hf, e_hf * HA_TO_EV);
     println!("  CA Correlation εc:   {:.6} Ha ({:.4} eV)", e_c_ref, e_c_ref * HA_TO_EV);
     println!("  Expected total E/N:  {:.6} Ha", e_hf + e_c_ref);
@@ -158,7 +158,7 @@ fn main() {
 
     // Run VMC simulation with twist averaging
     println!("Running VMC simulation with {} twist(s)...", num_twists);
-    println!("════════════════════════════════════════════");
+    println!("============================================");
     
     let mut total_energy = 0.0;
     let mut total_variance = 0.0;
@@ -193,33 +193,33 @@ fn main() {
     let correlation_estimate = energy_per_electron - e_hf;
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║                          RESULTS                              ║");
-    println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║                                                              ║");
+    println!("================================================================");
+    println!("|                          RESULTS                              |");
+    println!("================================================================");
+    println!("|                                                              |");
     if num_twists > 1 {
         println!("  [Twist-averaged over {} k-points]", num_twists);
-        println!("║                                                              ║");
+        println!("|                                                              |");
     }
-    println!("  Total energy:        {:.6} ± {:.6} Ha", avg_energy, avg_error);
-    println!("  Energy per electron: {:.6} ± {:.6} Ha", energy_per_electron, error_per_electron);
-    println!("  Energy per electron: {:.4} ± {:.4} eV", 
+    println!("  Total energy:        {:.6} +/- {:.6} Ha", avg_energy, avg_error);
+    println!("  Energy per electron: {:.6} +/- {:.6} Ha", energy_per_electron, error_per_electron);
+    println!("  Energy per electron: {:.4} +/- {:.4} eV", 
         energy_per_electron * HA_TO_EV, error_per_electron * HA_TO_EV);
-    println!("║                                                              ║");
+    println!("|                                                              |");
     println!("  Hartree-Fock E/N:    {:.6} Ha", e_hf);
-    println!("  VMC correlation εc:  {:.6} ± {:.6} Ha", correlation_estimate, error_per_electron);
+    println!("  VMC correlation εc:  {:.6} +/- {:.6} Ha", correlation_estimate, error_per_electron);
     println!("  CA reference εc:     {:.6} Ha", e_c_ref);
     println!("  Difference:          {:.6} Ha ({:.1}%)", 
         correlation_estimate - e_c_ref,
         100.0 * (correlation_estimate - e_c_ref).abs() / e_c_ref.abs());
-    println!("║                                                              ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("|                                                              |");
+    println!("================================================================");
     println!();
 
     // Summary for LDA usage
     println!("For LDA parameterization:");
-    println!("══════════════════════════");
-    println!("  rs = {:.2}  →  εc = {:.6} Ha/electron", args.rs, correlation_estimate);
+    println!("==========================");
+    println!("  rs = {:.2}  ->  εc = {:.6} Ha/electron", args.rs, correlation_estimate);
     println!();
     println!("Run at multiple rs values (1, 2, 5, 10, 20, 50, 100) to fit LDA functional.");
 }

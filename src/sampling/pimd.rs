@@ -32,25 +32,25 @@ use super::pimc::Potential;
 /// Transforms between bead coordinates {x_i} and normal mode coordinates {q_k}
 /// using the orthogonal matrix from Tuckerman's staging approach.
 ///
-/// Normal mode frequencies: ω_k = 2/(βₚℏ) sin(πk/P) for k = 0,...,P-1
-/// where βₚ = β/P is the bead inverse temperature.
+/// Normal mode frequencies: w_k = 2/(betaₚhbar) sin(πk/P) for k = 0,...,P-1
+/// where betaₚ = beta/P is the bead inverse temperature.
 #[derive(Clone)]
 pub struct NormalModeTransform {
     /// Number of beads P
     pub n_beads: usize,
-    /// Normal mode frequencies ω_k (in internal units)
+    /// Normal mode frequencies w_k (in internal units)
     pub frequencies: Vec<f64>,
-    /// Imaginary time step Δτ = β/P (= βₚ in atomic units with ℏ=1)
+    /// Imaginary time step dτ = beta/P (= betaₚ in atomic units with hbar=1)
     pub dtau: f64,
 }
 
 impl NormalModeTransform {
-    /// Create normal mode transform for P beads at inverse temperature β
+    /// Create normal mode transform for P beads at inverse temperature beta
     pub fn new(n_beads: usize, beta: f64) -> Self {
         let dtau = beta / n_beads as f64;
         let p = n_beads as f64;
 
-        // Normal mode frequencies: ω_k = 2/(Δτ) sin(πk/P)
+        // Normal mode frequencies: w_k = 2/(dτ) sin(πk/P)
         // These are the eigenvalues of the spring coupling matrix
         let frequencies: Vec<f64> = (0..n_beads)
             .map(|k| {
@@ -63,10 +63,10 @@ impl NormalModeTransform {
 
     /// Transform from bead coordinates to normal mode coordinates
     /// Uses the orthogonal transformation matrix C where:
-    ///   q_0 = (1/√P) Σ_i x_i              (centroid)
-    ///   q_k = √(2/P) Σ_i x_i cos(2πki/P)  (k = 1..P/2-1)
-    ///   q_{P/2} = (1/√P) Σ_i (-1)^i x_i   (if P even)
-    ///   q_k = √(2/P) Σ_i x_i sin(2πki/P)  (k = P/2+1..P-1, paired with cos modes)
+    ///   q_0 = (1/sqrtP) Σ_i x_i              (centroid)
+    ///   q_k = sqrt(2/P) Σ_i x_i cos(2πki/P)  (k = 1..P/2-1)
+    ///   q_{P/2} = (1/sqrtP) Σ_i (-1)^i x_i   (if P even)
+    ///   q_k = sqrt(2/P) Σ_i x_i sin(2πki/P)  (k = P/2+1..P-1, paired with cos modes)
     pub fn to_normal_modes(&self, beads: &[f64]) -> Vec<f64> {
         let p = self.n_beads;
         let pf = p as f64;
@@ -140,8 +140,8 @@ impl NormalModeTransform {
 /// Path Integral Langevin Equation (PILE) thermostat.
 ///
 /// Applies frequency-dependent Langevin friction in normal mode space:
-/// - Centroid (k=0): γ₀ = user-specified physical friction
-/// - Internal modes (k>0): γ_k = 2ω_k (critically damped for optimal sampling)
+/// - Centroid (k=0): γ0 = user-specified physical friction
+/// - Internal modes (k>0): γ_k = 2w_k (critically damped for optimal sampling)
 ///
 /// The OBABO splitting ensures symplectic integration:
 ///   O: half-step Ornstein-Uhlenbeck (friction + noise)
@@ -153,7 +153,7 @@ impl NormalModeTransform {
 pub struct PILEThermostat {
     /// Number of beads P
     pub n_beads: usize,
-    /// Target inverse temperature β (of physical system, not per-bead)
+    /// Target inverse temperature beta (of physical system, not per-bead)
     pub beta: f64,
     /// Time step dt
     pub dt: f64,
@@ -163,7 +163,7 @@ pub struct PILEThermostat {
     pub c1: Vec<f64>,
     /// sqrt(1 - c1²) noise coefficients for O step
     pub c2: Vec<f64>,
-    /// Target kinetic temperature per mode: k_B T = 1/β in atomic units
+    /// Target kinetic temperature per mode: k_B T = 1/beta in atomic units
     pub kbt: f64,
     /// Particle mass
     pub mass: f64,
@@ -188,7 +188,7 @@ impl PILEThermostat {
         nm_transform: &NormalModeTransform,
     ) -> Self {
         // The ring polymer Hamiltonian is sampled at the BEAD temperature
-        // T_P = P × T, i.e., β_P = β/P. So kBT_P = P/β.
+        // T_P = P x T, i.e., beta_P = beta/P. So kBT_P = P/beta.
         // Each bead velocity is thermalized at this temperature.
         let kbt = n_beads as f64 / beta;
 
@@ -196,7 +196,7 @@ impl PILEThermostat {
         let mut gamma = vec![0.0; n_beads];
         gamma[0] = gamma_centroid;
 
-        // Internal modes: γ_k = 2ω_k (critically damped)
+        // Internal modes: γ_k = 2w_k (critically damped)
         for k in 1..n_beads {
             gamma[k] = 2.0 * nm_transform.frequencies[k.min(n_beads - k)];
         }
@@ -211,14 +211,14 @@ impl PILEThermostat {
 
     /// Apply the Ornstein-Uhlenbeck (O) half-step to normal mode velocities
     ///
-    /// v_k → c1_k · v_k + c2_k · σ_k · η
+    /// v_k -> c1_k . v_k + c2_k . σ_k . η
     /// where σ_k = sqrt(k_B T_P / m) and η ~ N(0,1)
-    /// Note: T_P = P × T is the bead temperature.
+    /// Note: T_P = P x T is the bead temperature.
     pub fn apply_o_step(&self, mode_velocities: &mut [f64]) {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0.0, 1.0).unwrap();
 
-        // Target velocity width: σ = sqrt(kBT_P / m) = sqrt(P/(βm))
+        // Target velocity width: σ = sqrt(kBT_P / m) = sqrt(P/(betam))
         let sigma = (self.kbt / self.mass).sqrt();
 
         for k in 0..self.n_beads {
@@ -235,8 +235,8 @@ impl PILEThermostat {
 /// A single ring polymer representing one quantum particle with P beads.
 ///
 /// The ring polymer Hamiltonian is:
-///   H_RP = Σᵢ [½m v_i² + ½mω_P²(x_{i+1}-x_i)² + V(x_i)]
-/// where ω_P = P/(βℏ) = 1/(Δτ) is the intra-bead spring frequency.
+///   H_RP = Σᵢ [0.5m v_i² + 0.5mw_P²(x_{i+1}-x_i)² + V(x_i)]
+/// where w_P = P/(betahbar) = 1/(dτ) is the intra-bead spring frequency.
 #[derive(Clone)]
 pub struct RingPolymer<P: Potential> {
     /// Bead positions x_i, i = 0..P-1
@@ -249,12 +249,12 @@ pub struct RingPolymer<P: Potential> {
     pub n_beads: usize,
     /// Particle mass (a.u.)
     pub mass: f64,
-    /// Physical inverse temperature β
+    /// Physical inverse temperature beta
     pub beta: f64,
-    /// Imaginary time step Δτ = β/P
+    /// Imaginary time step dτ = beta/P
     pub dtau: f64,
-    /// Spring constant: κ = m P / β² = m / (Δτ² P)
-    /// Actually for nearest-neighbor spring: κ = mP/(β²ℏ²) = m / Δτ²
+    /// Spring constant: κ = m P / beta² = m / (dτ² P)
+    /// Actually for nearest-neighbor spring: κ = mP/(beta²hbar²) = m / dτ²
     pub spring_constant: f64,
     /// External potential
     pub potential: P,
@@ -265,7 +265,7 @@ impl<P: Potential> RingPolymer<P> {
     ///
     /// # Arguments
     /// * `n_beads` - Number of Trotter beads P
-    /// * `beta` - Physical inverse temperature β
+    /// * `beta` - Physical inverse temperature beta
     /// * `mass` - Particle mass (atomic units)
     /// * `potential` - External potential V(x)
     pub fn new(n_beads: usize, beta: f64, mass: f64, potential: P) -> Self {
@@ -346,7 +346,7 @@ impl<P: Potential> RingPolymer<P> {
             .sum::<f64>() / self.n_beads as f64
     }
 
-    /// Total kinetic energy of the beads: Σᵢ ½m vᵢ²
+    /// Total kinetic energy of the beads: Σᵢ 0.5m vᵢ²
     /// (This is the MD kinetic energy, NOT the quantum kinetic energy)
     pub fn kinetic_energy_md(&self) -> f64 {
         0.5 * self.mass * self.velocities.iter()
@@ -354,7 +354,7 @@ impl<P: Potential> RingPolymer<P> {
             .sum::<f64>()
     }
 
-    /// Spring (harmonic coupling) energy: Σᵢ ½κ(x_{i+1} - xᵢ)²
+    /// Spring (harmonic coupling) energy: Σᵢ 0.5κ(x_{i+1} - xᵢ)²
     pub fn spring_energy(&self) -> f64 {
         let mut energy = 0.0;
         for i in 0..self.n_beads {
@@ -366,20 +366,20 @@ impl<P: Potential> RingPolymer<P> {
     }
 
     /// Primitive energy estimator for the quantum particle:
-    ///   E_prim = P/(2β) - E_spring + <V>
+    ///   E_prim = P/(2beta) - E_spring + <V>
     ///
-    /// This has the "1/P variance problem" — variance grows with P.
+    /// This has the "1/P variance problem" -- variance grows with P.
     pub fn primitive_energy_estimator(&self) -> f64 {
         let p = self.n_beads as f64;
         // Kinetic part from primitive estimator
-        // = (P/2β) - Σ_i ½m(x_{i+1} - x_i)²/(2Δτ²)
+        // = (P/2beta) - Σ_i 0.5m(x_{i+1} - x_i)²/(2dτ²)
         p / (2.0 * self.beta) - self.spring_energy() / p + self.potential_energy()
     }
 
     /// Virial energy estimator (lower variance):
-    ///   E_vir = d/(2β) + (1/P) Σᵢ [V(xᵢ) + ½(xᵢ - x̄)·(dV/dxᵢ)]
+    ///   E_vir = d/(2beta) + (1/P) Σᵢ [V(xᵢ) + 0.5(xᵢ - x̄).(dV/dxᵢ)]
     ///
-    /// For d=1:  E_vir = 1/(2β) + <V> + (1/2P) Σᵢ (xᵢ - x̄)·(dV/dxᵢ)
+    /// For d=1:  E_vir = 1/(2beta) + <V> + (1/2P) Σᵢ (xᵢ - x̄).(dV/dxᵢ)
     ///
     /// This estimator is independent of P to leading order in variance.
     /// Reference: Tuckerman, Statistical Mechanics, Eq. 12.6.22
@@ -392,7 +392,7 @@ impl<P: Potential> RingPolymer<P> {
             virial_sum += (self.positions[i] - xbar) * dv_dx;
         }
 
-        // d/(2β) + <V> + virial_correction
+        // d/(2beta) + <V> + virial_correction
         // d=1 for 1D
         1.0 / (2.0 * self.beta) + self.potential_energy() + 0.5 * virial_sum / self.n_beads as f64
     }
@@ -405,7 +405,7 @@ impl<P: Potential> RingPolymer<P> {
     }
 
     /// Count how many beads are on each side of the barrier (x=0)
-    /// Returns (n_left, n_right) — useful for tunneling analysis
+    /// Returns (n_left, n_right) -- useful for tunneling analysis
     pub fn bead_distribution(&self) -> (usize, usize) {
         let n_left = self.positions.iter().filter(|&&x| x < 0.0).count();
         let n_right = self.n_beads - n_left;
@@ -551,7 +551,7 @@ impl<P: Potential> PIMDSimulation<P> {
     }
 
     /// Build position histogram |ψ(x)|² from all bead positions of all polymers
-    /// (single snapshot — for accumulated statistics, use accumulate_histogram)
+    /// (single snapshot -- for accumulated statistics, use accumulate_histogram)
     pub fn build_histogram(&self, n_bins: usize, x_min: f64, x_max: f64) -> (Vec<f64>, Vec<f64>) {
         let bin_width = (x_max - x_min) / n_bins as f64;
         let mut counts = vec![0.0; n_bins];
@@ -641,20 +641,20 @@ pub fn run_pimd_proton_transfer(
     let potential = ProtonTransferPotential::symmetric(barrier_height, well_distance);
     let omega_well = potential.well_frequency(mass);
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║    Path Integral Molecular Dynamics - Proton Transfer       ║");
-    println!("║    Bead-Based Ring Polymer with PILE Thermostat             ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("==============================================================");
+    println!("  Path Integral Molecular Dynamics - Proton Transfer");
+    println!("  Bead-Based Ring Polymer with PILE Thermostat");
+    println!("==============================================================");
     println!();
     println!("Physical parameters:");
     println!("  Particle mass: {:.2} a.u. ({:.4} m_e)", mass, mass);
-    println!("  Temperature: {:.1} K  (β = {:.2} a.u.)", 315774.65 / beta, beta);
+    println!("  Temperature: {:.1} K  (beta = {:.2} a.u.)", 315774.65 / beta, beta);
     println!("  Barrier height: {:.6} Hartree ({:.2} kcal/mol)", 
              barrier_height, barrier_height * 627.509);
-    println!("  Well distance: ±{:.4} Bohr", well_distance);
-    println!("  Well frequency: ω = {:.6} a.u. ({:.1} cm⁻¹)", 
+    println!("  Well distance: +/-{:.4} Bohr", well_distance);
+    println!("  Well frequency: w = {:.6} a.u. ({:.1} cm-1)", 
              omega_well, omega_well * 219474.63);
-    println!("  Thermal de Broglie λ_dB = {:.4} Bohr",
+    println!("  Thermal de Broglie lambda_dB = {:.4} Bohr",
              (2.0 * PI * beta / mass).sqrt());
     println!();
     println!("Simulation parameters:");
@@ -668,9 +668,9 @@ pub fn run_pimd_proton_transfer(
     // =========================================================================
     // Classical simulation (P=1)
     // =========================================================================
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("------------------------------------------------------------");
     println!("  Running CLASSICAL simulation (P = 1 bead)...");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("------------------------------------------------------------");
 
     let gamma_centroid = 0.001 * omega_well; // Light coupling for centroid
     let mut classical_sim = PIMDSimulation::new(
@@ -688,7 +688,7 @@ pub fn run_pimd_proton_transfer(
     }
     println!();
 
-    // Production classical — accumulate histogram over trajectory
+    // Production classical -- accumulate histogram over trajectory
     let n_hist_bins = 200;
     let hist_xmin = -3.0 * well_distance;
     let hist_xmax = 3.0 * well_distance;
@@ -736,7 +736,7 @@ pub fn run_pimd_proton_transfer(
 
     println!();
     println!("  Classical results:");
-    println!("    E_virial   = {:.6} ± {:.6} Hartree", cl_mean_e, cl_stderr_e);
+    println!("    E_virial   = {:.6} +/- {:.6} Hartree", cl_mean_e, cl_stderr_e);
     println!("    <x>        = {:.6} Bohr", cl_mean_x);
     println!("    Tunneling  = {:.2}%", 100.0 * cl_tunnel);
 
@@ -744,9 +744,9 @@ pub fn run_pimd_proton_transfer(
     // Quantum simulation (P = n_beads)
     // =========================================================================
     println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("------------------------------------------------------------");
     println!("  Running QUANTUM simulation (P = {} beads)...", n_beads);
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("------------------------------------------------------------");
 
     let mut quantum_sim = PIMDSimulation::new(
         n_polymers, n_beads, beta, mass, dt, gamma_centroid, potential.clone(),
@@ -764,7 +764,7 @@ pub fn run_pimd_proton_transfer(
     }
     println!();
 
-    // Production quantum — accumulate histogram over trajectory
+    // Production quantum -- accumulate histogram over trajectory
     let mut q_energies = Vec::with_capacity(n_production);
     let mut q_centroids = Vec::with_capacity(n_production);
     let mut q_rg = Vec::with_capacity(n_production);
@@ -808,7 +808,7 @@ pub fn run_pimd_proton_transfer(
 
     println!();
     println!("  Quantum results:");
-    println!("    E_virial   = {:.6} ± {:.6} Hartree", q_mean_e, q_stderr_e);
+    println!("    E_virial   = {:.6} +/- {:.6} Hartree", q_mean_e, q_stderr_e);
     println!("    <x>        = {:.6} Bohr", q_mean_x);
     println!("    <R_g>      = {:.6} Bohr (quantum delocalization)", q_mean_rg);
     println!("    Tunneling  = {:.2}%", 100.0 * q_tunnel);
@@ -817,42 +817,42 @@ pub fn run_pimd_proton_transfer(
     // Summary comparison
     // =========================================================================
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║                    COMPARISON SUMMARY                       ║");
-    println!("╠══════════════════════════════════════════════════════════════╣");
-    println!("║  {:>20} │ {:>12} │ {:>12}  ║", "Property", "Classical", "Quantum");
-    println!("║  {:>20} │ {:>12} │ {:>12}  ║", "────────────────────", "────────────", "────────────");
-    println!("║  {:>20} │ {:>12.6} │ {:>12.6}  ║", "E_virial (Ha)", cl_mean_e, q_mean_e);
-    println!("║  {:>20} │ {:>12.6} │ {:>12.6}  ║", "<x> (Bohr)", cl_mean_x, q_mean_x);
-    println!("║  {:>20} │ {:>12} │ {:>12.6}  ║", "R_g (Bohr)", "N/A", q_mean_rg);
-    println!("║  {:>20} │ {:>11.2}% │ {:>11.2}%  ║", "Tunneling", 100.0 * cl_tunnel, 100.0 * q_tunnel);
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("==============================================================");
+    println!("                    COMPARISON SUMMARY");
+    println!("==============================================================");
+    println!("  {:>20} | {:>12} | {:>12}", "Property", "Classical", "Quantum");
+    println!("  {:>20} | {:>12} | {:>12}", "--------------------", "------------", "------------");
+    println!("  {:>20} | {:>12.6} | {:>12.6}", "E_virial (Ha)", cl_mean_e, q_mean_e);
+    println!("  {:>20} | {:>12.6} | {:>12.6}", "<x> (Bohr)", cl_mean_x, q_mean_x);
+    println!("  {:>20} | {:>12} | {:>12.6}", "R_g (Bohr)", "N/A", q_mean_rg);
+    println!("  {:>20} | {:>11.2}% | {:>11.2}%", "Tunneling", 100.0 * cl_tunnel, 100.0 * q_tunnel);
+    println!("==============================================================");
     println!();
     println!("Physical interpretation:");
     if q_tunnel > cl_tunnel + 0.01 {
-        println!("  ✓ Quantum tunneling is OBSERVED!");
+        println!("  * Quantum tunneling is OBSERVED!");
         println!("    The ring polymer delocalizes across the barrier,");
         println!("    showing {:.1}% of beads on the donor side vs {:.1}% classically.",
                  100.0 * q_tunnel, 100.0 * cl_tunnel);
         if q_tunnel > 0.2 {
-            println!("    → Strong tunneling: proton is significantly delocalized!");
+            println!("    -> Strong tunneling: proton is significantly delocalized!");
         } else if q_tunnel > 0.05 {
-            println!("    → Moderate tunneling: clear quantum enhancement of barrier crossing.");
+            println!("    -> Moderate tunneling: clear quantum enhancement of barrier crossing.");
         } else {
-            println!("    → Weak tunneling: quantum effects are present but subtle.");
+            println!("    -> Weak tunneling: quantum effects are present but subtle.");
         }
     } else {
-        println!("  ○ Quantum effects are minimal for these parameters.");
-        println!("    Try increasing β (lower T) or decreasing the barrier.");
+        println!("  o Quantum effects are minimal for these parameters.");
+        println!("    Try increasing beta (lower T) or decreasing the barrier.");
     }
     let zpe_ratio = q_mean_e / cl_mean_e.max(1e-10);
-    println!("  ✓ Zero-point energy: E_quantum/E_classical = {:.1}×", zpe_ratio);
+    println!("  * Zero-point energy: E_quantum/E_classical = {:.1}x", zpe_ratio);
     println!("    Quantum ZPE raises the energy by {:.6} Hartree ({:.2} kcal/mol)",
              q_mean_e - cl_mean_e, (q_mean_e - cl_mean_e) * 627.509);
     if q_mean_rg > well_distance * 0.15 {
-        println!("  ✓ Ring polymer R_g ({:.4}) is significant compared to well distance ({:.4})",
+        println!("  * Ring polymer R_g ({:.4}) is significant compared to well distance ({:.4})",
                  q_mean_rg, well_distance);
-        println!("    → Quantum delocalization of the proton wavepacket!");
+        println!("    -> Quantum delocalization of the proton wavepacket!");
     }
 
     // =========================================================================
@@ -869,7 +869,7 @@ pub fn run_pimd_proton_transfer(
             writeln!(writer, "{:.6} {:.6} {:.6} {:.6}", cl_x[i], cl_psi2[i], q_psi2[i], v).unwrap();
         }
         println!();
-        println!("Position distribution → pimd_position_distribution.txt");
+        println!("Position distribution -> pimd_position_distribution.txt");
     }
 
     // Energy trajectory
@@ -883,7 +883,7 @@ pub fn run_pimd_proton_transfer(
                      i, cl_energies[i], q_energies[i], 
                      cl_centroids[i], q_centroids[i], q_rg[i]).unwrap();
         }
-        println!("Energy trajectory     → pimd_proton_transfer.txt");
+        println!("Energy trajectory     -> pimd_proton_transfer.txt");
     }
 
     // Bead snapshot
@@ -897,7 +897,7 @@ pub fn run_pimd_proton_transfer(
                 writeln!(writer, "{} {} {:.6}", pi, bi, x).unwrap();
             }
         }
-        println!("Bead snapshot         → pimd_bead_snapshot.txt");
+        println!("Bead snapshot         -> pimd_bead_snapshot.txt");
     }
 }
 
@@ -913,7 +913,7 @@ mod tests {
 
     #[test]
     fn test_normal_mode_roundtrip() {
-        // Verify that to_beads(to_normal_modes(x)) ≈ x
+        // Verify that to_beads(to_normal_modes(x)) ~ x
         let nmt = NormalModeTransform::new(8, 10.0);
         let beads = vec![1.0, 0.5, -0.3, 0.8, -1.0, 0.2, 0.7, -0.5];
         let modes = nmt.to_normal_modes(&beads);
@@ -935,7 +935,7 @@ mod tests {
 
     #[test]
     fn test_harmonic_oscillator_pimd() {
-        // For a harmonic oscillator with ω=1, m=1: E₀ = ½ℏω = 0.5
+        // For a harmonic oscillator with w=1, m=1: E0 = 0.5hbarw = 0.5
         let pot = HarmonicPotential { mass: 1.0, omega: 1.0 };
         let n_beads = 32;
         let beta = 20.0;
@@ -986,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_free_particle_rg() {
-        // For a free particle: R_g² = βℏ²/(12m) = β/(12m) in a.u.
+        // For a free particle: R_g² = betahbar²/(12m) = beta/(12m) in a.u.
         // Use very weak harmonic to approximate free particle
         let pot = HarmonicPotential { mass: 1.0, omega: 0.001 }; // Nearly free
         let n_beads = 64;

@@ -3,12 +3,12 @@
 //! Run with: cargo run --release --example pimd_zundel_isotope
 //!
 //! Compares the quantum behaviour of the shared proton (H*) vs deuteron (D*)
-//! in H₂O—X⁺—OH₂  where X = H or D.
+//! in H2O--X+--OH2  where X = H or D.
 //!
-//! The kinetic isotope effect (KIE) arises because deuterium (mass 2×H) has:
-//!   • Smaller zero-point energy → less quantum delocalization
-//!   • Shorter de Broglie wavelength → less tunneling
-//!   • Narrower ring polymer → R_g(D) < R_g(H)
+//! The kinetic isotope effect (KIE) arises because deuterium (mass 2xH) has:
+//!   • Smaller zero-point energy -> less quantum delocalization
+//!   • Shorter de Broglie wavelength -> less tunneling
+//!   • Narrower ring polymer -> R_g(D) < R_g(H)
 
 use rust_qmc::sampling::{MolecularPIMD, ZundelPES, free_energy_profile};
 use std::fs::File;
@@ -134,29 +134,29 @@ fn main() {
     for &temp in &temperatures {
         let beta = 315774.65 / temp;
 
-        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        println!("  T = {} K  (β = {:.2} a.u.)", temp as u32, beta);
-        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("------------------------------------------------------------");
+        println!("  T = {} K  (beta = {:.2} a.u.)", temp as u32, beta);
+        println!("------------------------------------------------------------");
         println!();
 
         let mut temp_results = Vec::new();
 
         // Run H
-        println!("  ── Hydrogen (H*) ──");
+        println!("  -- Hydrogen (H*) --");
         let h_result = run_isotope(
             &pes, m_h, "H", n_polymers, n_beads, beta, dt, n_equilibrate, n_production,
         );
         println!();
 
         // Run D
-        println!("  ── Deuterium (D*) ──");
+        println!("  -- Deuterium (D*) --");
         let d_result = run_isotope(
             &pes, m_d, "D", n_polymers, n_beads, beta, dt, n_equilibrate, n_production,
         );
         println!();
 
         // Run T
-        println!("  ── Tritium (T*) ──");
+        println!("  -- Tritium (T*) --");
         let t_result = run_isotope(
             &pes, m_t, "T", n_polymers, n_beads, beta, dt, n_equilibrate, n_production,
         );
@@ -299,7 +299,7 @@ fn main() {
             }
         }
         println!();
-        println!("  Isotope data → pimd_zundel_isotope.txt");
+        println!("  Isotope data -> pimd_zundel_isotope.txt");
     }
     // Distribution comparison at each temperature
     {
@@ -323,7 +323,7 @@ fn main() {
             }
             writeln!(w).unwrap();
         }
-        println!("  Distribution comparison → pimd_zundel_isotope_dist.txt");
+        println!("  Distribution comparison -> pimd_zundel_isotope_dist.txt");
     }
     println!();
 }

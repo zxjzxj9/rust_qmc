@@ -1,4 +1,4 @@
-//! Benzene (C₆H₆) Geometry Optimization Example
+//! Benzene (C6H6) Geometry Optimization Example
 //!
 //! Starts from a slightly expanded ring geometry and optimizes nuclear
 //! positions using VMC-estimated Hellmann-Feynman forces.
@@ -15,7 +15,7 @@ const HA_TO_EV: f64 = 27.21138602;
 const BOHR_TO_ANG: f64 = 0.529177;
 
 fn main() {
-    println!("Benzene (C₆H₆) Geometry Optimization");
+    println!("Benzene (C6H6) Geometry Optimization");
     println!("======================================\n");
 
     // Create wavefunction
@@ -44,12 +44,12 @@ fn main() {
     for i in 0..6 {
         let j = (i + 1) % 6;
         let d = (distorted[i] - distorted[j]).norm();
-        println!("  C{}-C{}: {:.4} Bohr ({:.4} Å)", i, j, d, d * BOHR_TO_ANG);
+        println!("  C{}-C{}: {:.4} Bohr ({:.4} A)", i, j, d, d * BOHR_TO_ANG);
     }
     println!("C-H bond lengths:");
     for i in 0..6 {
         let d = (distorted[i] - distorted[6 + i]).norm();
-        println!("  C{}-H{}: {:.4} Bohr ({:.4} Å)", i, i, d, d * BOHR_TO_ANG);
+        println!("  C{}-H{}: {:.4} Bohr ({:.4} A)", i, i, d, d * BOHR_TO_ANG);
     }
     println!();
 
@@ -74,12 +74,12 @@ fn main() {
     for i in 0..6 {
         let j = (i + 1) % 6;
         let d = (result.final_nuclei[i] - result.final_nuclei[j]).norm();
-        println!("  C{}-C{}: {:.4} Bohr ({:.4} Å)", i, j, d, d * BOHR_TO_ANG);
+        println!("  C{}-C{}: {:.4} Bohr ({:.4} A)", i, j, d, d * BOHR_TO_ANG);
     }
     println!("Final C-H bond lengths:");
     for i in 0..6 {
         let d = (result.final_nuclei[i] - result.final_nuclei[6 + i]).norm();
-        println!("  C{}-H{}: {:.4} Bohr ({:.4} Å)", i, i, d, d * BOHR_TO_ANG);
+        println!("  C{}-H{}: {:.4} Bohr ({:.4} A)", i, i, d, d * BOHR_TO_ANG);
     }
 }
 

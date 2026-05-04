@@ -73,7 +73,7 @@ fn main() {
     println!();
     println!("Results");
     println!("-------");
-    println!("Energy: {:.6} ± {:.6} Ha", results.energy, results.error);
-    println!("Energy: {:.4} ± {:.4} eV", results.energy * HA_TO_EV, results.error * HA_TO_EV);
+    println!("Energy: {:.6} +/- {:.6} Ha", results.energy, results.error);
+    println!("Energy: {:.4} +/- {:.4} eV", results.energy * HA_TO_EV, results.error * HA_TO_EV);
     println!("Autocorrelation time: {:.2} steps", results.autocorrelation_time);
 }

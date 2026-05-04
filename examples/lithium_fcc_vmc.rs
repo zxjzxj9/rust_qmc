@@ -7,7 +7,7 @@
 //!
 //! Options:
 //!   -a, --lattice-constant <BOHR>  Lattice constant in Bohr [default: 8.0]
-//!   -s, --supercell <N>            Supercell size (N×N×N) [default: 1]
+//!   -s, --supercell <N>            Supercell size (NxNxN) [default: 1]
 //!   -e, --electrons <N>            Electrons per atom (1 or 3) [default: 1]
 //!   -n, --steps <N>                Number of VMC steps [default: 100000]
 //!   -w, --walkers <N>              Number of walkers [default: 10]
@@ -23,7 +23,7 @@ struct Args {
     #[arg(short = 'a', long, default_value_t = 8.0)]
     lattice_constant: f64,
 
-    /// Supercell size (N×N×N)
+    /// Supercell size (NxNxN)
     #[arg(short, long, default_value_t = 1)]
     supercell: usize,
 
@@ -52,7 +52,7 @@ fn main() {
 
     // Create the wavefunction
     let wavefunction = if args.supercell > 1 {
-        println!("Creating Li FCC crystal with {}×{}×{} supercell...",
+        println!("Creating Li FCC crystal with {}x{}x{} supercell...",
             args.supercell, args.supercell, args.supercell);
         LithiumFCC::new_supercell(
             args.lattice_constant,
@@ -70,7 +70,7 @@ fn main() {
 
     println!("\nSimulation Parameters:");
     println!("======================");
-    println!("Lattice constant:    {:.2} Bohr ({:.2} Å)", 
+    println!("Lattice constant:    {:.2} Bohr ({:.2} A)", 
         args.lattice_constant, args.lattice_constant * 0.529177);
     println!("Number of atoms:     {}", num_atoms);
     println!("Electrons per atom:  {}", args.electrons);
@@ -99,15 +99,15 @@ fn main() {
     // Print results
     println!("\nResults:");
     println!("--------");
-    println!("Total energy:        {:.6} ± {:.6} Ha", results.energy, results.error);
-    println!("Total energy:        {:.4} ± {:.4} eV", 
+    println!("Total energy:        {:.6} +/- {:.6} Ha", results.energy, results.error);
+    println!("Total energy:        {:.4} +/- {:.4} eV", 
         results.energy * HA_TO_EV, results.error * HA_TO_EV);
     
     if num_atoms > 0 {
         let energy_per_atom = results.energy / num_atoms as f64;
         let error_per_atom = results.error / num_atoms as f64;
-        println!("Energy per atom:     {:.6} ± {:.6} Ha", energy_per_atom, error_per_atom);
-        println!("Energy per atom:     {:.4} ± {:.4} eV", 
+        println!("Energy per atom:     {:.6} +/- {:.6} Ha", energy_per_atom, error_per_atom);
+        println!("Energy per atom:     {:.4} +/- {:.4} eV", 
             energy_per_atom * HA_TO_EV, error_per_atom * HA_TO_EV);
     }
     

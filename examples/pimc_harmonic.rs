@@ -11,16 +11,16 @@ fn main() {
     // Simulation parameters
     let n_paths = 100;          // Number of parallel walkers
     let n_beads = 128;          // Trotter slices (M) - more = less Trotter error
-    let beta = 40.0;            // Inverse temperature (low T → ground state)
-    let omega = 1.0;            // Oscillator frequency (ℏω = 1 in natural units)
+    let beta = 40.0;            // Inverse temperature (low T -> ground state)
+    let omega = 1.0;            // Oscillator frequency (hbarw = 1 in natural units)
     let n_thermalize = 5000;    // Thermalization sweeps
     let n_production = 10000;   // Production sweeps
     let use_staging = false;    // Use Metropolis moves only for now
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║     Path Integral Monte Carlo - Harmonic Oscillator          ║");
-    println!("║     Using Wick's Rotation with Parallel Paths & PBC          ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|     Path Integral Monte Carlo - Harmonic Oscillator          |");
+    println!("|     Using Wick's Rotation with Parallel Paths & PBC          |");
+    println!("================================================================");
     println!();
 
     run_pimc_harmonic(
@@ -34,9 +34,9 @@ fn main() {
     );
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║  For ground state of harmonic oscillator:                    ║");
-    println!("║    E₀ = ½ℏω = 0.5 (in natural units where ℏ=m=ω=1)          ║");
-    println!("║    <x²> = ℏ/(2mω) = 0.5                                      ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|  For ground state of harmonic oscillator:                    |");
+    println!("|    E0 = 0.5hbarw = 0.5 (in natural units where hbar=m=w=1)          |");
+    println!("|    <x²> = hbar/(2mw) = 0.5                                      |");
+    println!("================================================================");
 }

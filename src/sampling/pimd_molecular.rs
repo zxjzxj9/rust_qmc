@@ -78,8 +78,8 @@ pub trait MolecularPotential: Clone + Send + Sync {
 
 /// Ring polymer for a multi-atom molecular system.
 ///
-/// Each bead stores a full molecular geometry (ndof = 3 × N_atoms coordinates).
-/// Spring constants are per-atom: κ_a = m_a / Δτ² for atom a.
+/// Each bead stores a full molecular geometry (ndof = 3 x N_atoms coordinates).
+/// Spring constants are per-atom: κ_a = m_a / dτ² for atom a.
 pub struct MolecularRingPolymer<P: MolecularPotential> {
     /// Bead positions: positions[bead][dof], each bead has ndof entries
     pub positions: Vec<Vec<f64>>,
@@ -95,15 +95,15 @@ pub struct MolecularRingPolymer<P: MolecularPotential> {
     pub ndof: usize,
     /// Per-atom masses [m0, m1, ...]
     pub masses: Vec<f64>,
-    /// Per-DOF mass (maps dof index → atom mass): mass_dof[d] = masses[d/3]
+    /// Per-DOF mass (maps dof index -> atom mass): mass_dof[d] = masses[d/3]
     pub mass_dof: Vec<f64>,
-    /// Per-atom spring constants κ_a = m_a / Δτ²
+    /// Per-atom spring constants κ_a = m_a / dτ²
     pub spring_constants: Vec<f64>,
-    /// Per-DOF spring constants (maps dof → spring constant)
+    /// Per-DOF spring constants (maps dof -> spring constant)
     pub spring_dof: Vec<f64>,
-    /// Physical inverse temperature β
+    /// Physical inverse temperature beta
     pub beta: f64,
-    /// Imaginary time step Δτ = β/P
+    /// Imaginary time step dτ = beta/P
     pub dtau: f64,
     /// The molecular potential
     pub potential: P,
@@ -144,7 +144,7 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
             for d in 0..ndof {
                 let m = mass_dof[d];
                 // Small position perturbation
-                let sigma_x = 0.01; // Bohr — small perturbation
+                let sigma_x = 0.01; // Bohr -- small perturbation
                 let pos_noise = Normal::new(0.0, sigma_x).unwrap();
                 pos[d] += pos_noise.sample(&mut rng);
 
@@ -225,7 +225,7 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
 
     /// Centroid virial energy estimator for N-D:
     ///
-    ///   E_cv = N_dof/(2β) + (1/P) Σ_i [V(R_i) + ½ Σ_d (R_i[d] - R̄[d]) × (∂V/∂R_i[d])]
+    ///   E_cv = N_dof/(2beta) + (1/P) Σ_i [V(R_i) + 0.5 Σ_d (R_i[d] - R̄[d]) x (∂V/∂R_i[d])]
     ///
     /// Here N_dof is the number of degrees of freedom.
     pub fn virial_energy_estimator(&self) -> f64 {
@@ -243,13 +243,13 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
             let v_i = self.potential.energy(&self.positions[i]);
             let mut virial = 0.0;
             for d in 0..ndof {
-                // ∂V/∂R = -F_phys, so (R-R̄)·(∂V/∂R) = -(R-R̄)·F
+                // ∂V/∂R = -F_phys, so (R-R̄).(∂V/∂R) = -(R-R̄).F
                 virial += (self.positions[i][d] - cent[d]) * (-phys_forces[d]);
             }
             sum += v_i + 0.5 * virial;
         }
 
-        // N_dof/(2β) + bead-averaged [ V + virial_correction ]
+        // N_dof/(2beta) + bead-averaged [ V + virial_correction ]
         ndof as f64 / (2.0 * self.beta) + sum / p
     }
 
@@ -321,21 +321,21 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
 ///
 /// Each degree of freedom is thermostatted independently in normal mode space.
 /// The per-atom mass enters through the velocity noise width:
-///   σ_{a,k} = √(kBT_P / m_a)
+///   σ_{a,k} = sqrt(kBT_P / m_a)
 ///
-/// Mode frequencies ω_k are the same for all atoms (they depend only on β and P).
+/// Mode frequencies w_k are the same for all atoms (they depend only on beta and P).
 pub struct MolecularPILE {
     /// Number of beads P
     pub n_beads: usize,
     /// Number of DOF
     pub ndof: usize,
-    /// Bead temperature kBT_P = P/β
+    /// Bead temperature kBT_P = P/beta
     pub kbt_p: f64,
-    /// Per-DOF velocity noise width: σ[d] = √(kBT_P / m_d)
+    /// Per-DOF velocity noise width: σ[d] = sqrt(kBT_P / m_d)
     pub sigma: Vec<f64>,
     /// Propagator coefficients c1[k] = exp(-γ_k dt/2)
     pub c1: Vec<f64>,
-    /// Noise coefficients c2[k] = √(1 - c1[k]²)
+    /// Noise coefficients c2[k] = sqrt(1 - c1[k]²)
     pub c2: Vec<f64>,
 }
 
@@ -347,7 +347,7 @@ impl MolecularPILE {
         dt: f64,
         masses: &[f64],   // per-atom masses
         gamma_centroid: f64,
-        nm_frequencies: &[f64],  // normal mode frequencies ω_k
+        nm_frequencies: &[f64],  // normal mode frequencies w_k
     ) -> Self {
         let n_atoms = masses.len();
         let ndof = 3 * n_atoms;
@@ -375,7 +375,7 @@ impl MolecularPILE {
 
     /// Apply O step to normal mode velocities for all DOF.
     ///
-    /// `mode_vel` is [mode_k][dof_d] — mode k's velocity for each DOF.
+    /// `mode_vel` is [mode_k][dof_d] -- mode k's velocity for each DOF.
     pub fn apply_o_step(&self, mode_vel: &mut Vec<Vec<f64>>) {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0.0, 1.0).unwrap();
@@ -450,7 +450,7 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
         self.nm_transform.to_normal_modes(&vals)
     }
 
-    /// Inverse: mode values for DOF d → bead values
+    /// Inverse: mode values for DOF d -> bead values
     fn to_beads_1d(&self, mode_values: &[f64]) -> Vec<f64> {
         self.nm_transform.to_beads(mode_values)
     }
@@ -609,7 +609,7 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
     }
 
     /// Proton R_g decomposed into parallel and perpendicular components
-    /// relative to the donor-acceptor (O···O) axis.
+    /// relative to the donor-acceptor (O...O) axis.
     /// Returns (R_g_parallel, R_g_perpendicular) averaged over all polymers.
     pub fn average_proton_rg_decomposed(
         &self, donor: usize, proton: usize, acceptor: usize,
@@ -726,39 +726,39 @@ pub fn free_energy_profile(histogram: &[f64], bin_width: f64, kbt: f64) -> Vec<f
 }
 
 // =============================================================================
-// Bifluoride (HF₂⁻) Potential Energy Surface
+// Bifluoride (HF2-) Potential Energy Surface
 // =============================================================================
 
-/// Potential energy surface for the bifluoride ion HF₂⁻ (F−H−F).
+/// Potential energy surface for the bifluoride ion HF2- (F-H-F).
 ///
-/// Atom ordering: F₁ (0), H (1), F₂ (2)
+/// Atom ordering: F1 (0), H (1), F2 (2)
 /// Linear geometry along the x-axis.
 ///
 /// The PES models:
-/// 1. Symmetric double-well for the proton along the F···F axis
-/// 2. F···F stretch (harmonic around equilibrium)
-/// 3. H bending modes (perpendicular to F···F axis)
+/// 1. Symmetric double-well for the proton along the F...F axis
+/// 2. F...F stretch (harmonic around equilibrium)
+/// 3. H bending modes (perpendicular to F...F axis)
 ///
 /// Parameters from CCSD(T) calculations:
-/// - F···F equilibrium distance: 2.278 Å = 4.304 Bohr
+/// - F...F equilibrium distance: 2.278 A = 4.304 Bohr
 /// - Barrier height: ~1.5 kcal/mol = 0.00239 Hartree
 /// - H placed symmetrically at the midpoint = TS geometry
-/// - Well O−H distance: ~0.95 Å = 1.795 Bohr from nearest F
+/// - Well O-H distance: ~0.95 A = 1.795 Bohr from nearest F
 ///
 /// Reference: Kawaguchi & Hirota, J. Chem. Phys. 84, 2953 (1986)
 #[derive(Clone)]
 pub struct BifluoridePES {
-    /// F···F equilibrium distance (Bohr)
+    /// F...F equilibrium distance (Bohr)
     pub r_ff_eq: f64,
-    /// F···F force constant (Hartree/Bohr²)
+    /// F...F force constant (Hartree/Bohr²)
     pub k_ff: f64,
     /// Barrier height at midpoint (Hartree)
     pub barrier_height: f64,
-    /// Equilibrium F−H distance (Bohr)
+    /// Equilibrium F-H distance (Bohr)
     pub r_fh_eq: f64,
-    /// F−H Morse well depth (Hartree)
+    /// F-H Morse well depth (Hartree)
     pub d_fh: f64,
-    /// F−H Morse width parameter (1/Bohr)
+    /// F-H Morse width parameter (1/Bohr)
     pub alpha_fh: f64,
     /// Bending force constant (Hartree/rad²)
     pub k_bend: f64,
@@ -770,17 +770,17 @@ impl BifluoridePES {
     /// Create a bifluoride PES with default CCSD(T)-quality parameters.
     pub fn new() -> Self {
         // Atomic masses in a.u.
-        let m_f = 34631.97; // ¹⁹F mass in electron masses
-        let m_h = 1836.15;  // ¹H mass
+        let m_f = 34631.97; // 1⁹F mass in electron masses
+        let m_h = 1836.15;  // 1H mass
 
         // Geometry (from spectroscopic and ab initio data)
-        let r_ff_eq = 4.304;   // F···F distance in Bohr (~2.278 Å)
-        let r_fh_eq = 1.832;   // F−H equilibrium in Bohr (~0.97 Å)
+        let r_ff_eq = 4.304;   // F...F distance in Bohr (~2.278 A)
+        let r_fh_eq = 1.832;   // F-H equilibrium in Bohr (~0.97 A)
 
         // Force constants
         let barrier_height = 0.00239; // ~1.5 kcal/mol
-        let k_ff = 0.15;              // F···F stretch force constant
-        let d_fh = 0.225;             // F−H Morse depth (~141 kcal/mol)
+        let k_ff = 0.15;              // F...F stretch force constant
+        let d_fh = 0.225;             // F-H Morse depth (~141 kcal/mol)
         let alpha_fh = 1.15;          // Morse width parameter
         let k_bend = 0.06;            // Bending force constant
 
@@ -823,42 +823,42 @@ impl MolecularPotential for BifluoridePES {
     fn n_atoms(&self) -> usize { 3 }
 
     fn energy(&self, coords: &[f64]) -> f64 {
-        // Atom 0 = F₁, Atom 1 = H, Atom 2 = F₂
+        // Atom 0 = F1, Atom 1 = H, Atom 2 = F2
         let r_f1h = Self::distance(coords, 0, 1);
         let r_f2h = Self::distance(coords, 2, 1);
         let r_ff  = Self::distance(coords, 0, 2);
 
-        // 1. F···F stretch: harmonic around equilibrium
+        // 1. F...F stretch: harmonic around equilibrium
         let v_ff = 0.5 * self.k_ff * (r_ff - self.r_ff_eq).powi(2);
 
-        // 2. Proton in double-well along F···F axis
+        // 2. Proton in double-well along F...F axis
         // Use a symmetric double-Morse potential:
-        // V_DM = D × [(1-exp(-α(r-r_eq)))² + (1-exp(-α(r'-r_eq)))²] - 2D
+        // V_DM = D x [(1-exp(-alpha(r-r_eq)))² + (1-exp(-alpha(r'-r_eq)))²] - 2D
         // plus a coupling term to create the barrier
         let morse_1 = self.d_fh * (1.0 - (-self.alpha_fh * (r_f1h - self.r_fh_eq)).exp()).powi(2);
         let morse_2 = self.d_fh * (1.0 - (-self.alpha_fh * (r_f2h - self.r_fh_eq)).exp()).powi(2);
 
-        // Coupling: when H is at midpoint, both Morse terms are nonzero → barrier
+        // Coupling: when H is at midpoint, both Morse terms are nonzero -> barrier
         // When H is near one F, one Morse is ~0, other is large
         // We use: V_proton = min(morse_1, morse_2) + barrier_correction
         // Better approach: LEPS-like mixing
-        //   V = (morse_1 + morse_2)/2 - sqrt((morse_1 - morse_2)²/4 + Δ²)
-        // where Δ controls the barrier height
+        //   V = (morse_1 + morse_2)/2 - sqrt((morse_1 - morse_2)²/4 + d²)
+        // where d controls the barrier height
         let avg = (morse_1 + morse_2) / 2.0;
         let diff2 = (morse_1 - morse_2).powi(2) / 4.0;
 
-        // Coupling parameter Δ chosen so barrier = self.barrier_height
-        // At TS (midpoint): morse_1 = morse_2 = M, so V = M - Δ
-        // At minimum: morse_1 ≈ 0, morse_2 ≈ M_large, V ≈ M_large/2 - sqrt(M_large²/4 + Δ²)
-        //           ≈ -Δ²/M_large ≈ 0 for large M_large
-        // So barrier ≈ M_ts - Δ where M_ts = d_fh(1-exp(-α(r_ff/2 - r_fh_eq)))²
+        // Coupling parameter d chosen so barrier = self.barrier_height
+        // At TS (midpoint): morse_1 = morse_2 = M, so V = M - d
+        // At minimum: morse_1 ~ 0, morse_2 ~ M_large, V ~ M_large/2 - sqrt(M_large²/4 + d²)
+        //           ~ -d²/M_large ~ 0 for large M_large
+        // So barrier ~ M_ts - d where M_ts = d_fh(1-exp(-alpha(r_ff/2 - r_fh_eq)))²
         let r_ts = r_ff / 2.0; // midpoint distance
         let m_ts = self.d_fh * (1.0 - (-self.alpha_fh * (r_ts - self.r_fh_eq)).exp()).powi(2);
         let delta = (m_ts - self.barrier_height).max(0.001);
 
-        let v_proton = avg - (diff2 + delta * delta).sqrt() + delta; // shift so minimum ≈ 0
+        let v_proton = avg - (diff2 + delta * delta).sqrt() + delta; // shift so minimum ~ 0
 
-        // 3. Bending: penalize H displacement perpendicular to F···F axis
+        // 3. Bending: penalize H displacement perpendicular to F...F axis
         let ff_axis = Self::unit_vector(coords, 0, 2);
         let f1h = [
             coords[3] - coords[0],
@@ -893,21 +893,21 @@ impl MolecularPotential for BifluoridePES {
     }
 
     fn reference_geometry(&self) -> Vec<f64> {
-        // Linear F−H−F along x-axis, H near F₁ (right well)
+        // Linear F-H-F along x-axis, H near F1 (right well)
         let r_ff = self.r_ff_eq;
         let r_fh = self.r_fh_eq;
         vec![
-            // F₁ at origin
+            // F1 at origin
             0.0, 0.0, 0.0,
-            // H near F₁ (in the "left well" at distance r_fh from F₁)
+            // H near F1 (in the "left well" at distance r_fh from F1)
             r_fh, 0.0, 0.0,
-            // F₂ at r_ff
+            // F2 at r_ff
             r_ff, 0.0, 0.0,
         ]
     }
 
     fn name(&self) -> &'static str {
-        "Bifluoride HF₂⁻ (F−H−F)"
+        "Bifluoride HF2- (F-H-F)"
     }
 }
 
@@ -915,10 +915,10 @@ impl MolecularPotential for BifluoridePES {
 // Simulation Driver
 // =============================================================================
 
-/// Run PIMD simulation for proton transfer in bifluoride HF₂⁻.
+/// Run PIMD simulation for proton transfer in bifluoride HF2-.
 ///
 /// Compares classical (P=1) and quantum (P=n_beads) behavior.
-/// Atom ordering: F₁(0), H(1), F₂(2) — proton transfers between two fluorines.
+/// Atom ordering: F1(0), H(1), F2(2) -- proton transfers between two fluorines.
 pub fn run_pimd_bifluoride(
     n_polymers: usize,
     n_beads: usize,
@@ -930,7 +930,7 @@ pub fn run_pimd_bifluoride(
     let pes = BifluoridePES::new();
     let m_h = pes.masses_arr[1];
 
-    // Indices: F₁=0, H=1, F₂=2
+    // Indices: F1=0, H=1, F2=2
     let donor = 0_usize;
     let proton = 1_usize;
     let acceptor = 2_usize;
@@ -1157,37 +1157,37 @@ pub fn run_pimd_bifluoride(
 }
 
 // =============================================================================
-// Zundel Cation (H₅O₂⁺) Potential Energy Surface
+// Zundel Cation (H5O2+) Potential Energy Surface
 // =============================================================================
 
-/// Empirical Valence Bond (EVB) potential for the Zundel cation H₅O₂⁺.
+/// Empirical Valence Bond (EVB) potential for the Zundel cation H5O2+.
 ///
 /// Significantly improved over a simple double-Morse model. The EVB approach
 /// models proton transfer as a mixing of two diabatic states:
 ///
-///   State 1: H₃O⁺(1) ··· H₂O(2)   — proton bonded to O₁
-///   State 2: H₂O(1) ··· H₃O⁺(2)   — proton bonded to O₂
+///   State 1: H3O+(1) ... H2O(2)   -- proton bonded to O1
+///   State 2: H2O(1) ... H3O+(2)   -- proton bonded to O2
 ///
-/// The ground-state energy is the lower eigenvalue of the 2×2 Hamiltonian:
-///   E = (H₁₁ + H₂₂)/2 - √[(H₁₁ - H₂₂)²/4 + H₁₂²]
+/// The ground-state energy is the lower eigenvalue of the 2x2 Hamiltonian:
+///   E = (H11 + H22)/2 - sqrt[(H11 - H22)²/4 + H12²]
 ///
 /// Key improvements over simple model:
-/// 1. **R_OO-dependent barrier**: H₁₂ coupling decays exponentially with O···O
-///    distance → shorter R_OO = lower barrier = easier transfer
-/// 2. **Proper diabatic states**: H₃O⁺ (Morse + bend + umbrella) vs H₂O (Morse + bend)
+/// 1. **R_OO-dependent barrier**: H12 coupling decays exponentially with O...O
+///    distance -> shorter R_OO = lower barrier = easier transfer
+/// 2. **Proper diabatic states**: H3O+ (Morse + bend + umbrella) vs H2O (Morse + bend)
 /// 3. **Electrostatic interactions**: screened Coulomb with partial charges
 /// 4. **Short-range repulsion**: Born-Mayer between oxygens
 ///
 /// Atom ordering (7 atoms, 21 DOF):
-///   0: O₁, 1: H₁a, 2: H₁b, 3: H* (shared), 4: O₂, 5: H₂a, 6: H₂b
+///   0: O1, 1: H1a, 2: H1b, 3: H* (shared), 4: O2, 5: H2a, 6: H2b
 ///
 /// References:
-///   - Schmitt & Voth, J. Chem. Phys. 111, 9361 (1999) — MS-EVB
+///   - Schmitt & Voth, J. Chem. Phys. 111, 9361 (1999) -- MS-EVB
 ///   - Vuilleumier & Borgis, Chem. Phys. Lett. 284, 71 (1998)
-///   - Huang et al., J. Chem. Phys. 122, 044308 (2005) — ab initio PES
+///   - Huang et al., J. Chem. Phys. 122, 044308 (2005) -- ab initio PES
 #[derive(Clone)]
 pub struct ZundelPES {
-    // === H₃O⁺ (hydronium) force field ===
+    // === H3O+ (hydronium) force field ===
     /// O-H Morse depth in hydronium (Hartree)
     pub d_h3o: f64,
     /// O-H Morse width in hydronium (1/Bohr)
@@ -1198,10 +1198,10 @@ pub struct ZundelPES {
     pub theta_h3o: f64,
     /// Bending force constant for hydronium (Hartree/rad²)
     pub k_bend_h3o: f64,
-    /// Umbrella (inversion) force constant for H₃O⁺ (Hartree/Bohr²)
+    /// Umbrella (inversion) force constant for H3O+ (Hartree/Bohr²)
     pub k_umbrella: f64,
 
-    // === H₂O (water) force field ===
+    // === H2O (water) force field ===
     /// O-H Morse depth in water (Hartree)
     pub d_h2o: f64,
     /// O-H Morse width in water (1/Bohr)
@@ -1216,25 +1216,25 @@ pub struct ZundelPES {
     // === EVB coupling ===
     /// Coupling amplitude A (Hartree)
     pub coupling_a: f64,
-    /// Coupling decay parameter μ (1/Bohr)
+    /// Coupling decay parameter mu (1/Bohr)
     pub coupling_mu: f64,
     /// Coupling reference distance (Bohr)
     pub coupling_r0: f64,
 
     // === Intermolecular ===
-    /// O···O equilibrium distance (Bohr)
+    /// O...O equilibrium distance (Bohr)
     pub r_oo_eq: f64,
     /// Born-Mayer repulsion amplitude (Hartree)
     pub rep_a: f64,
     /// Born-Mayer repulsion decay (1/Bohr)
     pub rep_b: f64,
-    /// Oxygen partial charge in H₂O (e)
+    /// Oxygen partial charge in H2O (e)
     pub q_o_w: f64,
-    /// Hydrogen partial charge in H₂O (e)
+    /// Hydrogen partial charge in H2O (e)
     pub q_h_w: f64,
-    /// Oxygen partial charge in H₃O⁺ (e)
+    /// Oxygen partial charge in H3O+ (e)
     pub q_o_h: f64,
-    /// Hydrogen partial charge in H₃O⁺ (e)
+    /// Hydrogen partial charge in H3O+ (e)
     pub q_h_h: f64,
     /// Coulomb screening distance (Bohr)
     pub screen: f64,
@@ -1252,31 +1252,31 @@ impl ZundelPES {
         let m_h = 1836.15;
 
         Self {
-            // Hydronium H₃O⁺
+            // Hydronium H3O+
             d_h3o: 0.195,              // ~122 kcal/mol, stiffer than water
             alpha_h3o: 1.24,
-            r_oh_h3o: 1.838,           // 0.973 Å
+            r_oh_h3o: 1.838,           // 0.973 A
             theta_h3o: 112.0_f64.to_radians(),
             k_bend_h3o: 0.085,
-            k_umbrella: 0.008,         // Weak — H₃O⁺ nearly planar in Zundel
+            k_umbrella: 0.008,         // Weak -- H3O+ nearly planar in Zundel
 
-            // Water H₂O
+            // Water H2O
             d_h2o: 0.185,              // ~116 kcal/mol
             alpha_h2o: 1.21,
-            r_oh_h2o: 1.809,           // 0.957 Å
+            r_oh_h2o: 1.809,           // 0.957 A
             theta_h2o: 104.52_f64.to_radians(),
             k_bend_h2o: 0.115,
 
-            // EVB coupling: H₁₂(R) = A × exp(-μ(R - R₀))
+            // EVB coupling: H12(R) = A x exp(-mu(R - R0))
             coupling_a: 0.018,
             coupling_mu: 0.55,
             coupling_r0: 4.535,
 
             // Intermolecular
-            r_oo_eq: 4.535,             // 2.40 Å
+            r_oo_eq: 4.535,             // 2.40 A
             rep_a: 0.8,                 // O-O short-range repulsion
             rep_b: 1.5,
-            q_o_w: -0.20,              // Reduced charges — EVB correction only
+            q_o_w: -0.20,              // Reduced charges -- EVB correction only
             q_h_w: 0.10,
             q_o_h: -0.10,             
             q_h_h: 0.10,
@@ -1333,23 +1333,23 @@ impl ZundelPES {
         q1 * q2 / (r*r + s*s).sqrt()
     }
 
-    /// Diabatic State 1: H₃O⁺(O₁, H₁a, H₁b, H*) + H₂O(O₂, H₂a, H₂b)
+    /// Diabatic State 1: H3O+(O1, H1a, H1b, H*) + H2O(O2, H2a, H2b)
     fn diabat1(&self, coords: &[f64]) -> f64 {
-        // H₃O⁺ stretches: O₁-H₁a, O₁-H₁b, O₁-H*
+        // H3O+ stretches: O1-H1a, O1-H1b, O1-H*
         let v_str = Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,0,1))
             + Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,0,2))
             + Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,0,3));
-        // H₃O⁺ bends
+        // H3O+ bends
         let v_bnd = 0.5 * self.k_bend_h3o * (
             (Self::angle(coords,1,0,2) - self.theta_h3o).powi(2)
             + (Self::angle(coords,1,0,3) - self.theta_h3o).powi(2)
             + (Self::angle(coords,2,0,3) - self.theta_h3o).powi(2));
-        // H₃O⁺ umbrella (O out-of-plane from H triangle)
+        // H3O+ umbrella (O out-of-plane from H triangle)
         let hx = (coords[3]+coords[6]+coords[9])/3.0;
         let hy = (coords[4]+coords[7]+coords[10])/3.0;
         let hz = (coords[5]+coords[8]+coords[11])/3.0;
         let v_umb = 0.5*self.k_umbrella*((coords[0]-hx).powi(2)+(coords[1]-hy).powi(2)+(coords[2]-hz).powi(2));
-        // H₂O stretches
+        // H2O stretches
         let v_w = Self::morse(self.d_h2o, self.alpha_h2o, self.r_oh_h2o, Self::dist(coords,4,5))
             + Self::morse(self.d_h2o, self.alpha_h2o, self.r_oh_h2o, Self::dist(coords,4,6));
         let v_wb = 0.5*self.k_bend_h2o*(Self::angle(coords,5,4,6)-self.theta_h2o).powi(2);
@@ -1362,13 +1362,13 @@ impl ZundelPES {
         v_str + v_bnd + v_umb + v_w + v_wb + vc + v_rep
     }
 
-    /// Diabatic State 2: H₂O(O₁, H₁a, H₁b) + H₃O⁺(O₂, H₂a, H₂b, H*)
+    /// Diabatic State 2: H2O(O1, H1a, H1b) + H3O+(O2, H2a, H2b, H*)
     fn diabat2(&self, coords: &[f64]) -> f64 {
-        // H₂O on O₁ side
+        // H2O on O1 side
         let v_w = Self::morse(self.d_h2o, self.alpha_h2o, self.r_oh_h2o, Self::dist(coords,0,1))
             + Self::morse(self.d_h2o, self.alpha_h2o, self.r_oh_h2o, Self::dist(coords,0,2));
         let v_wb = 0.5*self.k_bend_h2o*(Self::angle(coords,1,0,2)-self.theta_h2o).powi(2);
-        // H₃O⁺ on O₂ side: O₂-H₂a, O₂-H₂b, O₂-H*
+        // H3O+ on O2 side: O2-H2a, O2-H2b, O2-H*
         let v_str = Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,4,5))
             + Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,4,6))
             + Self::morse(self.d_h3o, self.alpha_h3o, self.r_oh_h3o, Self::dist(coords,4,3));
@@ -1376,7 +1376,7 @@ impl ZundelPES {
             (Self::angle(coords,5,4,6) - self.theta_h3o).powi(2)
             + (Self::angle(coords,5,4,3) - self.theta_h3o).powi(2)
             + (Self::angle(coords,6,4,3) - self.theta_h3o).powi(2));
-        // Umbrella for H₃O⁺ on O₂
+        // Umbrella for H3O+ on O2
         let hx = (coords[9]+coords[15]+coords[18])/3.0;
         let hy = (coords[10]+coords[16]+coords[19])/3.0;
         let hz = (coords[11]+coords[17]+coords[20])/3.0;
@@ -1390,7 +1390,7 @@ impl ZundelPES {
         v_w + v_wb + v_str + v_bnd + v_umb + vc + v_rep
     }
 
-    /// EVB coupling: H₁₂(R_OO) = A × exp(-μ(R_OO - R₀))
+    /// EVB coupling: H12(R_OO) = A x exp(-mu(R_OO - R0))
     fn coupling(&self, coords: &[f64]) -> f64 {
         let r_oo = Self::dist(coords, 0, 4);
         self.coupling_a * (-self.coupling_mu * (r_oo - self.coupling_r0)).exp()
@@ -1412,7 +1412,7 @@ impl ZundelPES {
         }
     }
 
-    /// dV_morse/dr = 2Dα(1 - e^{-α(r-r₀)}) e^{-α(r-r₀)}
+    /// dV_morse/dr = 2Dalpha(1 - e^{-alpha(r-r0)}) e^{-alpha(r-r0)}
     fn morse_dr(d: f64, alpha: f64, r0: f64, r: f64) -> f64 {
         let e = (-alpha * (r - r0)).exp();
         2.0 * d * alpha * (1.0 - e) * e
@@ -1440,7 +1440,7 @@ impl ZundelPES {
         Self::dist_grad(coords, i, j, grad, dvdr);
     }
 
-    /// Add angle-bending gradient: V = 0.5 * k * (θ - θ₀)²
+    /// Add angle-bending gradient: V = 0.5 * k * (θ - θ0)²
     /// Uses Wilson B-matrix approach for ∂θ/∂R.
     fn add_angle_grad(coords: &[f64], a: usize, b: usize, c: usize,
                       k: f64, theta0: f64, grad: &mut [f64]) {
@@ -1462,8 +1462,8 @@ impl ZundelPES {
         // dV/dθ
         let dvdtheta = k * (theta - theta0);
 
-        // ∂θ/∂R_a = (cos(θ)·ê_ba - ê_bc) / (r_ba·sin(θ))
-        // ∂θ/∂R_c = (cos(θ)·ê_bc - ê_ba) / (r_bc·sin(θ))
+        // ∂θ/∂R_a = (cos(θ).ê_ba - ê_bc) / (r_ba.sin(θ))
+        // ∂θ/∂R_c = (cos(θ).ê_bc - ê_ba) / (r_bc.sin(θ))
         // ∂θ/∂R_b = -(∂θ/∂R_a + ∂θ/∂R_c)
         for xyz in 0..3 {
             let eba = ba[xyz] / r_ba;
@@ -1477,7 +1477,7 @@ impl ZundelPES {
         }
     }
 
-    /// Add umbrella gradient for H₃O⁺.
+    /// Add umbrella gradient for H3O+.
     /// V = 0.5*k*|R_O - R̄_H|² where R̄_H = mean of 3 hydrogen positions.
     /// grad w.r.t. O: k*(R_O - R̄_H)
     /// grad w.r.t. each H: -k*(R_O - R̄_H)/3
@@ -1501,8 +1501,8 @@ impl ZundelPES {
         Self::dist_grad(coords, a, b_idx, grad, dvdr);
     }
 
-    /// Gradient of perpendicular distance squared of atom h from axis a→b.
-    /// perp² = |ah|² - (ah·ê_ab)²
+    /// Gradient of perpendicular distance squared of atom h from axis a->b.
+    /// perp² = |ah|² - (ah.ê_ab)²
     fn add_perp_dist2_grad(coords: &[f64], h: usize, a: usize, b: usize,
                            weight: f64, grad: &mut [f64]) {
         let r_ab = Self::dist(coords, a, b);
@@ -1543,24 +1543,24 @@ impl ZundelPES {
         // Zero the gradient buffer
         for g in grad.iter_mut() { *g = 0.0; }
 
-        // H₃O⁺ Morse stretches: O₁(0)-H₁a(1), O₁(0)-H₁b(2), O₁(0)-H*(3)
+        // H3O+ Morse stretches: O1(0)-H1a(1), O1(0)-H1b(2), O1(0)-H*(3)
         self.add_morse_grad(coords, 0, 1, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
         self.add_morse_grad(coords, 0, 2, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
         self.add_morse_grad(coords, 0, 3, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
 
-        // H₃O⁺ bends
+        // H3O+ bends
         Self::add_angle_grad(coords, 1, 0, 2, self.k_bend_h3o, self.theta_h3o, grad);
         Self::add_angle_grad(coords, 1, 0, 3, self.k_bend_h3o, self.theta_h3o, grad);
         Self::add_angle_grad(coords, 2, 0, 3, self.k_bend_h3o, self.theta_h3o, grad);
 
-        // H₃O⁺ umbrella: O₁(0) vs H triangle (1,2,3)
+        // H3O+ umbrella: O1(0) vs H triangle (1,2,3)
         Self::add_umbrella_grad(coords, 0, [1, 2, 3], self.k_umbrella, grad);
 
-        // H₂O Morse stretches: O₂(4)-H₂a(5), O₂(4)-H₂b(6)
+        // H2O Morse stretches: O2(4)-H2a(5), O2(4)-H2b(6)
         self.add_morse_grad(coords, 4, 5, self.d_h2o, self.alpha_h2o, self.r_oh_h2o, grad);
         self.add_morse_grad(coords, 4, 6, self.d_h2o, self.alpha_h2o, self.r_oh_h2o, grad);
 
-        // H₂O bend
+        // H2O bend
         Self::add_angle_grad(coords, 5, 4, 6, self.k_bend_h2o, self.theta_h2o, grad);
 
         // Intermolecular Coulomb
@@ -1572,7 +1572,7 @@ impl ZundelPES {
             }
         }
 
-        // Born-Mayer repulsion O₁(0)-O₂(4)
+        // Born-Mayer repulsion O1(0)-O2(4)
         self.add_rep_grad(coords, 0, 4, grad);
     }
 
@@ -1580,24 +1580,24 @@ impl ZundelPES {
     fn diabat2_grad(&self, coords: &[f64], grad: &mut [f64]) {
         for g in grad.iter_mut() { *g = 0.0; }
 
-        // H₂O Morse on O₁ side: O₁(0)-H₁a(1), O₁(0)-H₁b(2)
+        // H2O Morse on O1 side: O1(0)-H1a(1), O1(0)-H1b(2)
         self.add_morse_grad(coords, 0, 1, self.d_h2o, self.alpha_h2o, self.r_oh_h2o, grad);
         self.add_morse_grad(coords, 0, 2, self.d_h2o, self.alpha_h2o, self.r_oh_h2o, grad);
 
-        // H₂O bend on O₁ side
+        // H2O bend on O1 side
         Self::add_angle_grad(coords, 1, 0, 2, self.k_bend_h2o, self.theta_h2o, grad);
 
-        // H₃O⁺ Morse on O₂ side: O₂(4)-H₂a(5), O₂(4)-H₂b(6), O₂(4)-H*(3)
+        // H3O+ Morse on O2 side: O2(4)-H2a(5), O2(4)-H2b(6), O2(4)-H*(3)
         self.add_morse_grad(coords, 4, 5, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
         self.add_morse_grad(coords, 4, 6, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
         self.add_morse_grad(coords, 4, 3, self.d_h3o, self.alpha_h3o, self.r_oh_h3o, grad);
 
-        // H₃O⁺ bends on O₂ side
+        // H3O+ bends on O2 side
         Self::add_angle_grad(coords, 5, 4, 6, self.k_bend_h3o, self.theta_h3o, grad);
         Self::add_angle_grad(coords, 5, 4, 3, self.k_bend_h3o, self.theta_h3o, grad);
         Self::add_angle_grad(coords, 6, 4, 3, self.k_bend_h3o, self.theta_h3o, grad);
 
-        // H₃O⁺ umbrella on O₂: O₂(4) vs H triangle (3,5,6)
+        // H3O+ umbrella on O2: O2(4) vs H triangle (3,5,6)
         Self::add_umbrella_grad(coords, 4, [3, 5, 6], self.k_umbrella, grad);
 
         // Intermolecular Coulomb
@@ -1609,12 +1609,12 @@ impl ZundelPES {
             }
         }
 
-        // Born-Mayer repulsion O₁(0)-O₂(4)
+        // Born-Mayer repulsion O1(0)-O2(4)
         self.add_rep_grad(coords, 0, 4, grad);
     }
 
     /// Gradient of EVB coupling w.r.t. coordinates
-    /// H₁₂ = A*exp(-μ(R_OO - R₀)), only depends on R_OO
+    /// H12 = A*exp(-mu(R_OO - R0)), only depends on R_OO
     fn coupling_grad(&self, coords: &[f64], grad: &mut [f64]) {
         for g in grad.iter_mut() { *g = 0.0; }
         let r_oo = Self::dist(coords, 0, 4);
@@ -1632,7 +1632,7 @@ impl ZundelPES {
         let m_h = 1836.15;
 
         Self {
-            // Hydronium H₃O⁺ — slightly softer coupling
+            // Hydronium H3O+ -- slightly softer coupling
             d_h3o: 0.190,
             alpha_h3o: 1.22,
             r_oh_h3o: 1.838,
@@ -1640,7 +1640,7 @@ impl ZundelPES {
             k_bend_h3o: 0.082,
             k_umbrella: 0.006,
 
-            // Water H₂O
+            // Water H2O
             d_h2o: 0.185,
             alpha_h2o: 1.21,
             r_oh_h2o: 1.809,
@@ -1676,7 +1676,7 @@ impl MolecularPotential for ZundelPES {
         let h22 = self.diabat2(coords);
         let h12 = self.coupling(coords);
 
-        // Ground state of 2×2 EVB: E = (H₁₁+H₂₂)/2 - √[(H₁₁-H₂₂)²/4 + H₁₂²]
+        // Ground state of 2x2 EVB: E = (H11+H22)/2 - sqrt[(H11-H22)²/4 + H12²]
         let avg = (h11 + h22) / 2.0;
         let disc = ((h11 - h22).powi(2) / 4.0 + h12 * h12).sqrt();
         let e_ground = avg - disc;
@@ -1686,12 +1686,12 @@ impl MolecularPotential for ZundelPES {
         e_ground + 0.5 * self.k_perp * perp2
     }
 
-    /// Analytical forces using the Hellmann-Feynman theorem for the 2×2 EVB.
+    /// Analytical forces using the Hellmann-Feynman theorem for the 2x2 EVB.
     ///
-    /// For E = (H₁₁+H₂₂)/2 - √[(H₁₁-H₂₂)²/4 + H₁₂²]:
-    ///   ∂E/∂R = c₁²·∂H₁₁/∂R + c₂²·∂H₂₂/∂R + 2c₁c₂·∂H₁₂/∂R
+    /// For E = (H11+H22)/2 - sqrt[(H11-H22)²/4 + H12²]:
+    ///   ∂E/∂R = c1².∂H11/∂R + c2².∂H22/∂R + 2c1c2.∂H12/∂R
     ///
-    /// where c₁², c₂² are the populations of the two diabatic states in the
+    /// where c1², c2² are the populations of the two diabatic states in the
     /// ground-state eigenvector, and F = -∂E/∂R.
     fn forces(&self, coords: &[f64], forces: &mut [f64]) {
         let ndof = self.ndof();
@@ -1703,9 +1703,9 @@ impl MolecularPotential for ZundelPES {
         let disc = (diff * diff / 4.0 + h12 * h12).sqrt().max(1e-20);
 
         // EVB mixing coefficients: eigenvector of [[H11, H12],[H12, H22]]
-        // c1² = 0.5 + (H₂₂ - H₁₁)/(4*disc)  (weight of state 1)
-        // c2² = 0.5 - (H₂₂ - H₁₁)/(4*disc)  (weight of state 2)
-        // 2*c1*c2 = -H₁₂/disc (off-diagonal contribution)
+        // c1² = 0.5 + (H22 - H11)/(4*disc)  (weight of state 1)
+        // c2² = 0.5 - (H22 - H11)/(4*disc)  (weight of state 2)
+        // 2*c1*c2 = -H12/disc (off-diagonal contribution)
         let c1_sq = 0.5 + (h22 - h11) / (4.0 * disc);
         let c2_sq = 0.5 - (h22 - h11) / (4.0 * disc);
         let two_c1c2 = -h12 / disc;
@@ -1747,18 +1747,18 @@ impl MolecularPotential for ZundelPES {
         let hx_w = r_oh_w * tw.cos();
 
         vec![
-            0.0, 0.0, 0.0,             // O₁
-            -hx, hy, 0.0,              // H₁a
-            -hx, -hy, 0.0,             // H₁b
-            r_oh, 0.0, 0.0,            // H* near O₁
-            r_oo, 0.0, 0.0,            // O₂
-            r_oo+hx_w, 0.0, hy_w,      // H₂a
-            r_oo+hx_w, 0.0, -hy_w,     // H₂b
+            0.0, 0.0, 0.0,             // O1
+            -hx, hy, 0.0,              // H1a
+            -hx, -hy, 0.0,             // H1b
+            r_oh, 0.0, 0.0,            // H* near O1
+            r_oo, 0.0, 0.0,            // O2
+            r_oo+hx_w, 0.0, hy_w,      // H2a
+            r_oo+hx_w, 0.0, -hy_w,     // H2b
         ]
     }
 
     fn name(&self) -> &'static str {
-        "Zundel Cation H₅O₂⁺ — EVB PES"
+        "Zundel Cation H5O2+ -- EVB PES"
     }
 }
 
@@ -1766,10 +1766,10 @@ impl MolecularPotential for ZundelPES {
 // Zundel Cation Simulation Driver
 // =============================================================================
 
-/// Run PIMD simulation for proton transfer in the Zundel cation H₅O₂⁺.
+/// Run PIMD simulation for proton transfer in the Zundel cation H5O2+.
 ///
 /// Compares classical (P=1) and quantum (P=n_beads) behavior.
-/// The shared proton (atom 3) transfers between O₁ (atom 0) and O₂ (atom 4).
+/// The shared proton (atom 3) transfers between O1 (atom 0) and O2 (atom 4).
 pub fn run_pimd_zundel(
     n_polymers: usize,
     n_beads: usize,
@@ -1780,7 +1780,7 @@ pub fn run_pimd_zundel(
 ) {
     let pes = ZundelPES::new();
 
-    // Transfer coordinate: O₁ is donor (0), H* is proton (3), O₂ is acceptor (4)
+    // Transfer coordinate: O1 is donor (0), H* is proton (3), O2 is acceptor (4)
     let donor = 0_usize;
     let proton = 3_usize;
     let acceptor = 4_usize;
@@ -1896,7 +1896,7 @@ pub fn run_pimd_zundel(
     let mut q_tun_sum = 0.0;
     let mut q_tun_n = 0;
 
-    // 2D R_OO vs δ correlation histogram
+    // 2D R_OO vs d correlation histogram
     let n_roo_bins = 50;
     let roo_min = 3.5;
     let roo_max = 6.0;
@@ -2085,7 +2085,7 @@ pub fn run_pimd_zundel(
                      x, cp, qp, dp, w_cl[i], w_q[i], w_d[i]).unwrap();
         }
         println!();
-        println!("  Transfer coord + free energy → pimd_zundel_distribution.txt");
+        println!("  Transfer coord + free energy -> pimd_zundel_distribution.txt");
     }
     // Energy trajectory
     {
@@ -2098,9 +2098,9 @@ pub fn run_pimd_zundel(
                      i, cl_e[i], q_e[i], cl_tc[i], q_tc[i],
                      q_rg[i], q_rg_par[i], q_rg_perp[i], q_roo[i]).unwrap();
         }
-        println!("  Energy trajectory → pimd_zundel_energy.txt");
+        println!("  Energy trajectory -> pimd_zundel_energy.txt");
     }
-    // R_OO vs δ 2D correlation
+    // R_OO vs d 2D correlation
     {
         let file = File::create("pimd_zundel_roo_correlation.txt").unwrap();
         let mut w = BufWriter::new(file);
@@ -2116,7 +2116,7 @@ pub fn run_pimd_zundel(
                 }
             }
         }
-        println!("  R_OO vs δ correlation → pimd_zundel_roo_correlation.txt");
+        println!("  R_OO vs d correlation -> pimd_zundel_roo_correlation.txt");
     }
     // Bead snapshot
     {
@@ -2131,7 +2131,7 @@ pub fn run_pimd_zundel(
                 }
             }
         }
-        println!("  Bead snapshot → pimd_zundel_beads.txt");
+        println!("  Bead snapshot -> pimd_zundel_beads.txt");
     }
 }
 
@@ -2175,7 +2175,7 @@ mod tests {
 
     #[test]
     fn test_3d_harmonic_energy() {
-        // 3D harmonic oscillator: E₀ = 3/2 ℏω = 1.5 for ω=1, m=1
+        // 3D harmonic oscillator: E0 = 3/2 hbarw = 1.5 for w=1, m=1
         let pot = Harmonic3D { omega: 1.0, mass: 1.0 };
         let n_beads = 32;
         let beta = 20.0;
@@ -2196,7 +2196,7 @@ mod tests {
         }
 
         let mean_e = energies.iter().sum::<f64>() / energies.len() as f64;
-        // 3D ground state energy = 3 × 0.5 = 1.5
+        // 3D ground state energy = 3 x 0.5 = 1.5
         assert!((mean_e - 1.5).abs() < 0.25,
                 "3D harmonic energy {:.4} should be near 1.5", mean_e);
     }
@@ -2233,7 +2233,7 @@ mod tests {
         // Verify the PES has a double-well structure along x for the proton
         let pes = BifluoridePES::new();
 
-        // Place H at various positions along F₁−F₂ axis
+        // Place H at various positions along F1-F2 axis
         let r_ff = pes.r_ff_eq;
         let midpoint = r_ff / 2.0;
 
@@ -2253,7 +2253,7 @@ mod tests {
         assert!(e_ts > e_left, "TS energy ({:.6}) should be above left min ({:.6})", e_ts, e_left);
         assert!(e_ts > e_right, "TS energy ({:.6}) should be above right min ({:.6})", e_ts, e_right);
 
-        // Symmetric: left ≈ right
+        // Symmetric: left ~ right
         assert!((e_left - e_right).abs() < 0.001,
                 "Wells should be symmetric: left={:.6}, right={:.6}", e_left, e_right);
     }
@@ -2265,7 +2265,7 @@ mod tests {
         let cent = rp.centroid();
         // Centroid should exist and be finite
         assert!(cent.iter().all(|&c| c.is_finite()), "Centroid should be finite");
-        assert_eq!(cent.len(), 9); // 3 atoms × 3D
+        assert_eq!(cent.len(), 9); // 3 atoms x 3D
     }
 
     #[test]
@@ -2274,7 +2274,7 @@ mod tests {
         let r_oo = pes.r_oo_eq;
         let ref_geom = pes.reference_geometry();
 
-        // Energy at reference (H* near O₁)
+        // Energy at reference (H* near O1)
         let e_left = pes.energy(&ref_geom);
 
         // Energy with H* at midpoint (transition state)
@@ -2282,7 +2282,7 @@ mod tests {
         geom_ts[3 * 3] = r_oo / 2.0; // H* x = midpoint
         let e_ts = pes.energy(&geom_ts);
 
-        // Energy with H* near O₂ (right well)
+        // Energy with H* near O2 (right well)
         let mut geom_right = ref_geom.clone();
         geom_right[3 * 3] = r_oo - pes.r_oh_h3o;
         let e_right = pes.energy(&geom_right);

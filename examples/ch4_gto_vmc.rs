@@ -98,7 +98,7 @@ fn main() {
         println!("\n  Optimized params: b_ee={:.4}, b_en={:.4}, a_anti={:.4}, a_para={:.4}",
             result.final_params[0], result.final_params[1],
             result.final_params[2], result.final_params[3]);
-        println!("  Optimization energy: {:.5} ± {:.4} Ha\n",
+        println!("  Optimization energy: {:.5} +/- {:.4} Ha\n",
             result.final_energy,
             (result.final_variance / 5000.0).sqrt());
         println!("----------------------------------------------------------\n");
@@ -173,8 +173,8 @@ fn print_results(
     println!();
     println!("Results:");
     println!("--------");
-    println!("Total energy:        {:.6} ± {:.6} Ha", energy, error);
-    println!("Total energy:        {:.4} ± {:.4} eV", 
+    println!("Total energy:        {:.6} +/- {:.6} Ha", energy, error);
+    println!("Total energy:        {:.4} +/- {:.4} eV", 
              energy * HA_TO_EV, error * HA_TO_EV);
     println!();
     if let Some(rate) = acceptance_rate {
@@ -192,14 +192,14 @@ fn print_results(
     
     // Energy quality assessment
     if energy < -35.0 && energy > -50.0 {
-        println!("✓ Energy is in reasonable range for CH4");
+        println!("* Energy is in reasonable range for CH4");
         let diff = (energy + 40.0).abs();
         if diff < 1.0 {
-            println!("✓ Within 1 Ha of experimental value - excellent accuracy!");
+            println!("* Within 1 Ha of experimental value - excellent accuracy!");
         } else if diff < 2.0 {
-            println!("✓ Within 2 Ha of experimental value - good accuracy!");
+            println!("* Within 2 Ha of experimental value - good accuracy!");
         } else if diff < 5.0 {
-            println!("○ Within 5 Ha of experimental value - reasonable accuracy");
+            println!("o Within 5 Ha of experimental value - reasonable accuracy");
         } else {
             println!("△ More than 5 Ha from experimental - consider --optimize");
         }

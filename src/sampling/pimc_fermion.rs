@@ -39,7 +39,7 @@ pub trait TrialWavefunction: Clone + Send + Sync {
 // Simple Hydrogen 1s Wavefunction (for testing)
 // =============================================================================
 
-/// Simple hydrogen 1s trial wavefunction: Ψ = exp(-α|r - R_nuc|)
+/// Simple hydrogen 1s trial wavefunction: Ψ = exp(-alpha|r - R_nuc|)
 #[derive(Clone)]
 pub struct Hydrogen1s {
     pub alpha: f64,
@@ -70,9 +70,9 @@ impl TrialWavefunction for Hydrogen1s {
             return 0.0; // Avoid singularity
         }
         
-        // For Ψ = exp(-αr):
-        // ∇²Ψ/Ψ = α² - 2α/r
-        // K.E. = -½∇²Ψ/Ψ = -α²/2 + α/r
+        // For Ψ = exp(-alphar):
+        // ∇²Ψ/Ψ = alpha² - 2alpha/r
+        // K.E. = -0.5∇²Ψ/Ψ = -alpha²/2 + alpha/r
         let kinetic = -0.5 * self.alpha * self.alpha + self.alpha / r;
         
         // Coulomb potential: -Z/r for each nucleus
@@ -106,7 +106,7 @@ pub struct FermionPath<T: TrialWavefunction> {
     pub n_beads: usize,
     /// Number of electrons
     pub n_electrons: usize,
-    /// Imaginary time step Δτ = β/M
+    /// Imaginary time step dτ = beta/M
     pub dtau: f64,
     /// Inverse temperature
     pub beta: f64,
@@ -362,7 +362,7 @@ impl<T: TrialWavefunction> FermionPath<T> {
         }
         let mean_dr2 = spring_sum / n;
         
-        // 3D kinetic: 3N/(2β) - (m·M²/2β²)·<dr²>
+        // 3D kinetic: 3N/(2beta) - (m.M²/2beta²).<dr²>
         let kinetic = 3.0 * self.n_electrons as f64 / (2.0 * self.beta)
                     - self.mass * n * n * mean_dr2 / (2.0 * self.beta * self.beta);
         
@@ -532,9 +532,9 @@ pub fn run_pimc_hydrogen(
     println!("=== Fixed-Node PIMC: Hydrogen Atom ===");
     println!("Number of paths: {}", n_paths);
     println!("Number of beads (M): {}", n_beads);
-    println!("Inverse temperature β: {:.4}", beta);
+    println!("Inverse temperature beta: {:.4}", beta);
     println!("Trial wavefunction: Ψ = exp(-{:.4}r)", alpha);
-    println!("Expected ground state: E₀ = -0.5 Hartree");
+    println!("Expected ground state: E0 = -0.5 Hartree");
     println!();
 
     let mass = 1.0;  // Atomic units
@@ -596,12 +596,12 @@ pub fn run_pimc_hydrogen(
     println!();
     println!("=== Results ===");
     println!("Mixed estimator (expected: -0.5 Hartree):");
-    println!("  E_mixed = {:.6} ± {:.6} Hartree", mean_e_mix, stderr_e_mix);
+    println!("  E_mixed = {:.6} +/- {:.6} Hartree", mean_e_mix, stderr_e_mix);
     println!("Primitive estimator:");
     println!("  E_prim  = {:.6} Hartree", mean_e_prim);
     println!();
-    println!("Average radius (expected: 1.5 a₀):");
-    println!("  <r> = {:.4} a₀", mean_r);
+    println!("Average radius (expected: 1.5 a0):");
+    println!("  <r> = {:.4} a0", mean_r);
     println!();
     println!("Acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
 
@@ -628,7 +628,7 @@ mod tests {
     
     #[test]
     fn test_hydrogen_local_energy_at_optimal() {
-        // For hydrogen with α = 1.0, local energy should be -0.5 everywhere
+        // For hydrogen with alpha = 1.0, local energy should be -0.5 everywhere
         let wfn = Hydrogen1s::new(1.0, Vector3::zeros());
         let pos = vec![Vector3::new(1.0, 0.0, 0.0)];
         let nuc = vec![Vector3::zeros()];

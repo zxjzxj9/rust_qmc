@@ -17,17 +17,17 @@ fn main() {
     let n_thermalize = 3000;    // Thermalization sweeps
     let n_production = 10000;   // Production sweeps
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║     Fixed-Node Path Integral Monte Carlo                     ║");
-    println!("║               Hydrogen Atom (1 electron)                     ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|     Fixed-Node Path Integral Monte Carlo                     |");
+    println!("|               Hydrogen Atom (1 electron)                     |");
+    println!("================================================================");
     println!();
-    println!("Trial wavefunction: Ψ_T = exp(-αr) with α = {:.2}", alpha);
+    println!("Trial wavefunction: Ψ_T = exp(-alphar) with alpha = {:.2}", alpha);
     println!();
     println!("Physical insight:");
-    println!("  - 1s orbital has NO NODES → fixed-node is EXACT");
-    println!("  - Ground state energy: E₀ = -0.5 Hartree = -13.6 eV");
-    println!("  - Average radius: <r> = 1.5 a₀ (Bohr radii)");
+    println!("  - 1s orbital has NO NODES -> fixed-node is EXACT");
+    println!("  - Ground state energy: E0 = -0.5 Hartree = -13.6 eV");
+    println!("  - Average radius: <r> = 1.5 a0 (Bohr radii)");
     println!();
 
     run_pimc_hydrogen(
@@ -40,10 +40,10 @@ fn main() {
     );
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║  Exact results for hydrogen ground state:                    ║");
-    println!("║    E₀ = -0.5 Hartree = -13.606 eV                           ║");
-    println!("║    <r> = 1.5 a₀ = 0.794 Å                                   ║");
-    println!("║    <r²> = 3.0 a₀²                                           ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|  Exact results for hydrogen ground state:                    |");
+    println!("|    E0 = -0.5 Hartree = -13.606 eV                           |");
+    println!("|    <r> = 1.5 a0 = 0.794 A                                   |");
+    println!("|    <r²> = 3.0 a0²                                           |");
+    println!("================================================================");
 }

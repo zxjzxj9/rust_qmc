@@ -3,14 +3,14 @@
 //! Run with: cargo run --release --example pimd_zundel_temperature
 //!
 //! Sweeps temperature from 100K to 600K and extracts:
-//! - The effective free energy barrier W*(δ) = max(W) - min(W) at each T
+//! - The effective free energy barrier W*(d) = max(W) - min(W) at each T
 //! - Tunneling fraction at each T
 //! - Proton delocalization R_g(H*) at each T
 //!
 //! Physics: at low T, quantum tunneling dominates and the effective barrier
 //! is reduced relative to the classical PES barrier. At high T, thermal
 //! activation dominates and the barrier approaches the classical value.
-//! The crossover temperature T_c ≈ ℏω‡/(2πk_B) marks the transition.
+//! The crossover temperature T_c ~ hbarw‡/(2πk_B) marks the transition.
 
 use rust_qmc::sampling::{MolecularPIMD, ZundelPES, free_energy_profile};
 use std::fs::File;
@@ -114,18 +114,18 @@ fn run_at_temperature(
 }
 
 /// Extract the barrier height from a free energy profile.
-/// The barrier is W(δ=0) - W(δ_min), where δ_min is the well minimum.
+/// The barrier is W(d=0) - W(d_min), where d_min is the well minimum.
 fn extract_barrier(w: &[f64], x_min: f64, bin_width: f64) -> f64 {
     let n = w.len();
-    // Find the bin closest to δ=0 (transition state)
+    // Find the bin closest to d=0 (transition state)
     let ts_bin = ((-x_min) / bin_width) as usize;
     let ts_bin = ts_bin.min(n - 1);
 
-    // Find the minimum W in the left half (δ < 0)
+    // Find the minimum W in the left half (d < 0)
     let left_half = &w[..ts_bin.max(1)];
     let w_min_left = left_half.iter().cloned().fold(f64::INFINITY, f64::min);
 
-    // Find the minimum W in the right half (δ > 0)
+    // Find the minimum W in the right half (d > 0)
     let right_half = &w[ts_bin.min(n-1)..];
     let w_min_right = right_half.iter().cloned().fold(f64::INFINITY, f64::min);
 
@@ -159,25 +159,25 @@ fn main() {
     let n_equilibrate = 15_000;
     let n_production = 40_000;
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║   Temperature Dependence of Proton Transfer Barrier        ║");
-    println!("║   Zundel Cation H₅O₂⁺ — PIMD with Analytical EVB Forces  ║");
-    println!("║                                                             ║");
-    println!("║   Sweeping {} temperatures from {}K to {}K            ║",
+    println!("================================================================");
+    println!("|   Temperature Dependence of Proton Transfer Barrier        |");
+    println!("|   Zundel Cation H5O2+ -- PIMD with Analytical EVB Forces  |");
+    println!("|                                                             |");
+    println!("|   Sweeping {} temperatures from {}K to {}K            |",
              temperatures.len(),
              temperatures[0] as u32,
              *temperatures.last().unwrap() as u32);
-    println!("║   Beads: {}, Replicas: {}, Equil: {}, Prod: {}   ║",
+    println!("|   Beads: {}, Replicas: {}, Equil: {}, Prod: {}   |",
              n_beads, n_polymers, n_equilibrate, n_production);
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
     println!();
 
     let mut results: Vec<TempResult> = Vec::new();
 
     for (i, &temp) in temperatures.iter().enumerate() {
-        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("------------------------------------------------------------");
         println!("  [{}/{}] Running T = {} K ...", i + 1, temperatures.len(), temp as u32);
-        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("------------------------------------------------------------");
 
         let result = run_at_temperature(temp, n_beads, n_polymers, n_equilibrate, n_production, dt);
 
@@ -189,7 +189,7 @@ fn main() {
         let reduction = if result.cl_barrier > 1e-6 {
             100.0 * (1.0 - result.q_barrier / result.cl_barrier)
         } else { 0.0 };
-        println!("  → Barrier reduction: {:.1}%", reduction);
+        println!("  -> Barrier reduction: {:.1}%", reduction);
         println!();
 
         results.push(result);
@@ -199,17 +199,17 @@ fn main() {
     // Summary Table
     // =========================================================================
     println!();
-    println!("╔════════════════════════════════════════════════════════════════════════════════════╗");
-    println!("║                TEMPERATURE DEPENDENCE — SUMMARY TABLE                            ║");
-    println!("╠════════════════════════════════════════════════════════════════════════════════════╣");
-    println!("║  T (K) │ W*_cl (kcal) │ W*_qm (kcal) │ Reduction │ Tunnel_cl │ Tunnel_qm │ R_g  ║");
-    println!("║────────┼──────────────┼──────────────┼───────────┼───────────┼───────────┼──────║");
+    println!("======================================================================================");
+    println!("|                TEMPERATURE DEPENDENCE -- SUMMARY TABLE                            |");
+    println!("======================================================================================");
+    println!("|  T (K) | W*_cl (kcal) | W*_qm (kcal) | Reduction | Tunnel_cl | Tunnel_qm | R_g  |");
+    println!("|--------+--------------+--------------+-----------+-----------+-----------+------|");
 
     for r in &results {
         let reduction = if r.cl_barrier > 1e-6 {
             100.0 * (1.0 - r.q_barrier / r.cl_barrier)
         } else { 0.0 };
-        println!("║  {:>5} │ {:>12.3} │ {:>12.3} │ {:>8.1}% │ {:>8.1}% │ {:>8.1}% │{:>5.3} ║",
+        println!("|  {:>5} | {:>12.3} | {:>12.3} | {:>8.1}% | {:>8.1}% | {:>8.1}% |{:>5.3} |",
                  r.temp_k as u32,
                  r.cl_barrier * 627.509,
                  r.q_barrier * 627.509,
@@ -218,13 +218,13 @@ fn main() {
                  100.0 * r.q_tunnel,
                  r.q_rg);
     }
-    println!("╚════════════════════════════════════════════════════════════════════════════════════╝");
+    println!("======================================================================================");
 
     // =========================================================================
     // Physical Interpretation
     // =========================================================================
     println!();
-    println!("═══ ANALYSIS ═══");
+    println!("=== ANALYSIS ===");
     println!();
 
     // Find the crossover temperature (where barrier reduction drops below 50%)
@@ -248,13 +248,13 @@ fn main() {
                 100.0 * (1.0 - high.q_barrier / high.cl_barrier)
             } else { 0.0 };
 
-            println!("  • At T = {} K: barrier reduced by {:.0}%  → tunneling dominates",
+            println!("  • At T = {} K: barrier reduced by {:.0}%  -> tunneling dominates",
                      low.temp_k as u32, low_red);
-            println!("  • At T = {} K: barrier reduced by {:.0}%  → thermal activation dominates",
+            println!("  • At T = {} K: barrier reduced by {:.0}%  -> thermal activation dominates",
                      high.temp_k as u32, high_red);
 
             if low.q_rg > high.q_rg * 1.3 {
-                println!("  • Proton delocalization (R_g) increases {:.1}× from {} K to {} K",
+                println!("  • Proton delocalization (R_g) increases {:.1}x from {} K to {} K",
                          low.q_rg / high.q_rg.max(0.001),
                          high.temp_k as u32, low.temp_k as u32);
             }
@@ -262,7 +262,7 @@ fn main() {
     }
 
     if let Some(tc) = crossover {
-        println!("  • Crossover temperature T_c ≈ {} K (barrier reduction drops below 50%)", tc as u32);
+        println!("  • Crossover temperature T_c ~ {} K (barrier reduction drops below 50%)", tc as u32);
         println!("    Below T_c: quantum regime (tunneling through barrier)");
         println!("    Above T_c: classical regime (thermal hopping over barrier)");
     }
@@ -304,7 +304,7 @@ fn main() {
                      r.q_rg, r.cl_energy, r.q_energy).unwrap();
         }
         println!();
-        println!("  Temperature sweep data → pimd_zundel_temp_sweep.txt");
+        println!("  Temperature sweep data -> pimd_zundel_temp_sweep.txt");
     }
 
     // Free energy profiles at each temperature
@@ -333,14 +333,14 @@ fn main() {
             }
             writeln!(w).unwrap();
         }
-        println!("  Free energy profiles → pimd_zundel_temp_profiles.txt");
+        println!("  Free energy profiles -> pimd_zundel_temp_profiles.txt");
     }
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║  Plot suggestions:                                          ║");
-    println!("║  1. W*(T) curve: barrier vs temperature (from sweep file)  ║");
-    println!("║  2. W(δ) at each T: overlay free energy profiles           ║");
-    println!("║  3. R_g(T): proton delocalization vs temperature           ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!("================================================================");
+    println!("|  Plot suggestions:                                          |");
+    println!("|  1. W*(T) curve: barrier vs temperature (from sweep file)  |");
+    println!("|  2. W(d) at each T: overlay free energy profiles           |");
+    println!("|  3. R_g(T): proton delocalization vs temperature           |");
+    println!("================================================================");
 }

@@ -41,7 +41,7 @@ pub enum JastrowForm {
 /// Homogeneous Electron Gas (Jellium) wavefunction.
 ///
 /// Uses a Slater-Jastrow trial wavefunction:
-/// Ψ(R) = D↑(r↑) × D↓(r↓) × exp(J(R))
+/// Ψ(R) = D↑(r↑) x D↓(r↓) x exp(J(R))
 ///
 /// where D are Slater determinants of plane waves and J is the Jastrow factor.
 ///
@@ -125,7 +125,7 @@ impl HomogeneousElectronGas {
     /// * `twist` - Twist vector in reduced coordinates [-0.5, 0.5]³
     /// * `form` - Jastrow functional form (Pade, RPA, or Yukawa)
     ///
-    /// The twist shifts all k-vectors: k → k + θ×(2π/L)
+    /// The twist shifts all k-vectors: k → k + θx(2π/L)
     /// This is used for twist-averaged boundary conditions (TABC).
     pub fn new_with_twist_and_form(num_electrons: usize, rs: f64, jastrow_f: f64, twist: Vector3<f64>, form: JastrowForm) -> Self {
         // Box length from rs: L = (4π/3 · N)^(1/3) · rs
@@ -192,7 +192,7 @@ impl HomogeneousElectronGas {
     /// Generate k-vectors with twist offset.
     fn generate_k_vectors_with_twist(n: usize, box_length: f64, twist: &Vector3<f64>) -> Vec<Vector3<f64>> {
         let dk = 2.0 * PI / box_length;
-        // Twist offset in k-space: θ × (2π/L)
+        // Twist offset in k-space: θ x (2π/L)
         let k_twist = Vector3::new(twist.x * dk, twist.y * dk, twist.z * dk);
         
         let mut k_shells: Vec<(i32, i32, i32, f64)> = Vec::new();
@@ -465,7 +465,7 @@ impl HomogeneousElectronGas {
 
     /// Compute gradient of Jastrow u function.
     /// 
-    /// ∇ᵢu = du/dr × rij/r for pair (i,j)
+    /// ∇ᵢu = du/dr x rij/r for pair (i,j)
     fn jastrow_gradient(&self, positions: &[Vector3<f64>]) -> Vec<Vector3<f64>> {
         let n = positions.len();
         let mut grad = vec![Vector3::zeros(); n];
@@ -518,7 +518,7 @@ impl HomogeneousElectronGas {
     ///    in a compensating uniform background)
     /// 
     /// The Madelung constant ξ for a simple cubic lattice is 2.837297...
-    /// For jellium: E_Madelung = -N × ξ × rs^(-1) / 2 (in atomic units)
+    /// For jellium: E_Madelung = -N x ξ x rs^(-1) / 2 (in atomic units)
     /// 
     /// Reference: Fraser et al., PRB 53, 1814 (1996)
     fn ewald_potential(&self, positions: &[Vector3<f64>]) -> f64 {
@@ -528,7 +528,7 @@ impl HomogeneousElectronGas {
         let volume = l.powi(3);
         
         // === Part 1: Real-space sum ===
-        // V_real = Σᵢ<ⱼ erfc(α|rᵢⱼ|) / |rᵢⱼ|
+        // V_real = Σᵢ<ⱼ erfc(alpha|rᵢⱼ|) / |rᵢⱼ|
         let mut v_real = 0.0;
         for i in 0..n {
             for j in (i + 1)..n {
@@ -541,7 +541,7 @@ impl HomogeneousElectronGas {
         }
 
         // === Part 2: Reciprocal-space sum ===
-        // V_recip = (1/2) Σₖ≠₀ (4π/Vk²) exp(-k²/4α²) × [|S(k)|² - N]
+        // V_recip = (1/2) Σₖ≠0 (4π/Vk²) exp(-k²/4alpha²) x [|S(k)|² - N]
         let mut v_recip = 0.0;
         for (k, factor) in &self.ewald_k_vectors {
             let mut rho_k = Complex64::new(0.0, 0.0);
@@ -555,7 +555,7 @@ impl HomogeneousElectronGas {
         }
 
         // === Part 3: Self-energy correction ===
-        // V_self = -α N / √π
+        // V_self = -alpha N / √π
         // === Part 3: Madelung energy for jellium ===
         // For jellium, the standard approach is to use:
         // V = V_real + V_recip + V_Madelung
@@ -566,8 +566,8 @@ impl HomogeneousElectronGas {
         // The Madelung energy per electron in jellium is:
         // v_M = -ξ / rs  where ξ = 0.896 for 3D jellium (Perdew-Wang)
         // 
-        // In atomic units: V_M = -N × ξ / rs = -N × ξ / (L × (3/(4πN))^(1/3))
-        //                     = -N^(4/3) × ξ × (4π/3)^(1/3) / L
+        // In atomic units: V_M = -N x ξ / rs = -N x ξ / (L x (3/(4πN))^(1/3))
+        //                     = -N^(4/3) x ξ x (4π/3)^(1/3) / L
         // 
         // For rs = 4.0 with N = 14:
         // V_M/N = -0.448/4 = -0.112 (should match exchange energy)
@@ -621,8 +621,8 @@ impl HomogeneousElectronGas {
     /// Compute kinetic energy from plane-wave Slater determinant.
     /// 
     /// For plane waves: ∇²φₖ = -k² φₖ
-    /// So kinetic contribution from Slater det: T_D = Σᵢ Σⱼ (A⁻¹)ⱼᵢ × (k²ⱼ/2) × φⱼ(rᵢ) = Σⱼ k²ⱼ/2
-    /// where A⁻¹ is the inverse Slater matrix.
+    /// So kinetic contribution from Slater det: T_D = Σᵢ Σⱼ (A-¹)ⱼᵢ x (k²ⱼ/2) x φⱼ(rᵢ) = Σⱼ k²ⱼ/2
+    /// where A-¹ is the inverse Slater matrix.
     /// 
     /// This simplifies to just summing the occupied k² values (for a single-det wavefunction).
     fn kinetic_slater(&self) -> f64 {
@@ -637,13 +637,13 @@ impl HomogeneousElectronGas {
 
     /// Compute kinetic energy from the plane-wave Slater-Jastrow wavefunction.
     /// 
-    /// For Ψ = D × J where D is complex Slater determinant and J is real Jastrow:
+    /// For Ψ = D x J where D is complex Slater determinant and J is real Jastrow:
     /// T = -½ Re(∇²Ψ/Ψ) = -½ Re(∇²D/D + ∇²J/J + 2(∇D/D)·(∇J/J))
     /// 
     /// For plane waves:
     /// - ∇²D/D = -Σₖ k² (configuration-independent, sum over occupied k-vectors)
     /// - ∇J/J = ∇ln(J) (Jastrow gradient)
-    /// - ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (imaginary gradient from Slater inverse)
+    /// - ∇D/D = Σⱼ (A-¹)ⱼᵢ x ikⱼ (imaginary gradient from Slater inverse)
     /// 
     /// The cross term 2(∇D/D)·(∇J/J) has an imaginary part that contributes
     /// to the kinetic energy when we take the real part!
@@ -663,7 +663,7 @@ impl HomogeneousElectronGas {
 
         // === Part 3: Cross term between Slater and Jastrow ===
         // T_cross = -Re(Σᵢ (∇D/D)ᵢ · (∇J/J)ᵢ)
-        // For plane waves: (∇D/D)ᵢ = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ (purely imaginary)
+        // For plane waves: (∇D/D)ᵢ = Σⱼ (A-¹)ⱼᵢ x ikⱼ (purely imaginary)
         // Since (∇D/D) is purely imaginary and (∇J/J) is real,
         // the dot product is purely imaginary, so Re(...) = 0.
         // 
@@ -683,13 +683,13 @@ impl HomogeneousElectronGas {
 
     /// Compute the real part of the cross term: -Re(Σᵢ (∇ ln D)ᵢ · (∇ ln J)ᵢ)
     /// 
-    /// For plane waves, ∇ln(D) = Σⱼ (A⁻¹)ⱼᵢ × (∇φⱼ/φⱼ) = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ
+    /// For plane waves, ∇ln(D) = Σⱼ (A-¹)ⱼᵢ x (∇φⱼ/φⱼ) = Σⱼ (A-¹)ⱼᵢ x ikⱼ
     /// This is purely imaginary, so the real part of the cross term with
     /// real ∇ln(J) vanishes.
     /// 
-    /// However, for |D|×J, we need the gradient of ln|D| = Re(ln D).
-    /// Using d/dx|D| = |D| × Re((∇D/D)), we get:
-    /// ∇ln|D| = Re(∇ln D) = Re(Σⱼ (A⁻¹)ⱼᵢ × ikⱼ) = 0 for plane waves.
+    /// However, for |D|xJ, we need the gradient of ln|D| = Re(ln D).
+    /// Using d/dx|D| = |D| x Re((∇D/D)), we get:
+    /// ∇ln|D| = Re(∇ln D) = Re(Σⱼ (A-¹)ⱼᵢ x ikⱼ) = 0 for plane waves.
     /// 
     /// So the cross term is indeed zero for plane waves!
     fn kinetic_cross_term_real(&self, positions: &[Vector3<f64>], grad_j: &[Vector3<f64>]) -> f64 {
@@ -702,15 +702,15 @@ impl HomogeneousElectronGas {
         // Spin-up electrons
         if let Some(inv_up) = self.slater_inverse(&r_up, &self.k_vectors_up) {
             for i in 0..self.num_up {
-                // ∇ln|D_↑|ᵢ = Re(Σⱼ (A⁻¹)ⱼᵢ × ikⱼ) = Σⱼ Re((A⁻¹)ⱼᵢ) × (-kⱼ_imag) + Im((A⁻¹)ⱼᵢ) × kⱼ_real
+                // ∇ln|D_↑|ᵢ = Re(Σⱼ (A-¹)ⱼᵢ x ikⱼ) = Σⱼ Re((A-¹)ⱼᵢ) x (-kⱼ_imag) + Im((A-¹)ⱼᵢ) x kⱼ_real
                 // For real k-vectors (no imaginary part), this becomes:
-                // ∇ln|D|ᵢ = Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+                // ∇ln|D|ᵢ = Σⱼ Im((A-¹)ⱼᵢ) x kⱼ
                 let mut grad_ln_d_real = Vector3::<f64>::zeros();
                 for j in 0..self.num_up {
                     let inv_elem = inv_up[(j, i)];
                     let k = &self.k_vectors_up[j];
-                    // The gradient of ln|D| involves Im(A⁻¹) × k (since ik × A⁻¹ gives i × k × A⁻¹)
-                    // Re(i × k × A⁻¹) = -k × Im(A⁻¹)
+                    // The gradient of ln|D| involves Im(A-¹) x k (since ik x A-¹ gives i x k x A-¹)
+                    // Re(i x k x A-¹) = -k x Im(A-¹)
                     grad_ln_d_real.x += -k.x * inv_elem.im;
                     grad_ln_d_real.y += -k.y * inv_elem.im;
                     grad_ln_d_real.z += -k.z * inv_elem.im;
@@ -741,11 +741,11 @@ impl HomogeneousElectronGas {
 
     /// Compute the complex VMC cross term: -Re((∇D/D) · (∇J/J))
     /// 
-    /// For Ψ = D×J with complex D and real J, the cross term in kinetic energy is:
+    /// For Ψ = DxJ with complex D and real J, the cross term in kinetic energy is:
     /// T_cross = -Re((∇D/D) · (∇J/J)) = -Re(∇D/D) · (∇J/J)
     /// 
-    /// For plane waves: ∇D/D = Σⱼ (A⁻¹)ⱼᵢ × ikⱼ
-    /// Re(∇D/D) = -Σⱼ Im((A⁻¹)ⱼᵢ) × kⱼ
+    /// For plane waves: ∇D/D = Σⱼ (A-¹)ⱼᵢ x ikⱼ
+    /// Re(∇D/D) = -Σⱼ Im((A-¹)ⱼᵢ) x kⱼ
     fn complex_cross_term(&self, positions: &[Vector3<f64>], grad_j: &[Vector3<f64>]) -> f64 {
         // This is identical to kinetic_cross_term_real
         self.kinetic_cross_term_real(positions, grad_j)
@@ -766,7 +766,7 @@ impl HomogeneousElectronGas {
         // Spin-up electrons
         if let Some(inv_up) = self.slater_inverse(&r_up, &self.k_vectors_up) {
             for i in 0..self.num_up {
-                // ∇ₗₙD_↑ = Σⱼ (A⁻¹)ⱼᵢ × (ikⱼ) (imaginary)
+                // ∇ₗₙD_↑ = Σⱼ (A-¹)ⱼᵢ x (ikⱼ) (imaginary)
                 let mut grad_ln_d = Vector3::<Complex64>::zeros();
                 for j in 0..self.num_up {
                     let k = &self.k_vectors_up[j];
@@ -897,7 +897,7 @@ impl EnergyCalculator for HomogeneousElectronGas {
         let wrapped: Vec<_> = r.iter().map(|&pos| self.wrap_position(pos)).collect();
 
         // === COMPLEX VMC LOCAL ENERGY ===
-        // For Ψ = D × J where D is complex Slater determinant and J = exp(u) is real Jastrow:
+        // For Ψ = D x J where D is complex Slater determinant and J = exp(u) is real Jastrow:
         //
         // ∇²Ψ/Ψ = ∇²D/D + ∇²J/J + 2(∇D/D)·(∇J/J)
         //
@@ -1053,7 +1053,7 @@ mod tests {
         ];
         let grad = heg.jastrow_gradient(&positions);
         
-        // Gradient should be antisymmetric: ∇₁J = -∇₂J
+        // Gradient should be antisymmetric: ∇1J = -∇2J
         assert_relative_eq!(grad[0].x, -grad[1].x, epsilon = 1e-10);
         assert_relative_eq!(grad[0].y, -grad[1].y, epsilon = 1e-10);
         assert_relative_eq!(grad[0].z, -grad[1].z, epsilon = 1e-10);
@@ -1140,7 +1140,7 @@ mod tests {
         let (v_real, v_recip, v_self, v_madelung, v_total) = heg.ewald_potential_debug(&positions);
         
         println!("=== Ewald Debug ===");
-        println!("N = {}, L = {:.4}, α = {:.4}, V = {:.4}", n, l, alpha, volume);
+        println!("N = {}, L = {:.4}, alpha = {:.4}, V = {:.4}", n, l, alpha, volume);
         println!("");
         println!("V_real  = {:.6} Ha (short-range pairs)", v_real);
         println!("V_recip = {:.6} Ha (long-range k-space)", v_recip);

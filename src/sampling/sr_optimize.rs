@@ -3,11 +3,11 @@
 //! Implements the SR method for optimizing variational parameters by
 //! natural gradient descent on the energy. The parameter update rule is:
 //!
-//!   S · δp = -f
+//!   S . dp = -f
 //!
 //! where:
-//! - S_ij = ⟨O_i O_j⟩ - ⟨O_i⟩⟨O_j⟩  (overlap/covariance matrix)
-//! - f_i = ⟨E_L O_i⟩ - ⟨E_L⟩⟨O_i⟩  (energy-parameter covariance)
+//! - S_ij = <O_i O_j> - <O_i><O_j>  (overlap/covariance matrix)
+//! - f_i = <E_L O_i> - <E_L><O_i>  (energy-parameter covariance)
 //! - O_i = ∂ ln|Ψ| / ∂p_i            (log-derivatives)
 
 use nalgebra::{DMatrix, DVector, Vector3};
@@ -27,11 +27,11 @@ pub struct SROptimizer {
     pub n_equilibrate: usize,
     /// Maximum number of optimization iterations
     pub max_iterations: usize,
-    /// Learning rate (step size δt for parameter update)
+    /// Learning rate (step size dt for parameter update)
     pub learning_rate: f64,
     /// Levenberg-Marquardt regularization for the S matrix
     pub sr_epsilon: f64,
-    /// Convergence tolerance on |δE|
+    /// Convergence tolerance on |dE|
     pub tolerance: f64,
     /// Metropolis step size for sampling
     pub step_size: f64,
@@ -189,7 +189,7 @@ impl SROptimizer {
             .map(|e| (e - e_mean).powi(2))
             .sum::<f64>() / n;
         
-        // Mean log-derivatives: ⟨O_i⟩
+        // Mean log-derivatives: <O_i>
         let mut o_mean = vec![0.0; n_params];
         for od in log_derivs.iter() {
             for (i, &o) in od.iter().enumerate() {
@@ -200,7 +200,7 @@ impl SROptimizer {
             *v /= n;
         }
         
-        // Build S matrix: S_ij = ⟨O_i O_j⟩ - ⟨O_i⟩⟨O_j⟩
+        // Build S matrix: S_ij = <O_i O_j> - <O_i><O_j>
         let mut s_matrix = DMatrix::zeros(n_params, n_params);
         for od in log_derivs.iter() {
             for i in 0..n_params {
@@ -221,7 +221,7 @@ impl SROptimizer {
             s_matrix[(i, i)] += self.sr_epsilon;
         }
         
-        // Build force vector: f_i = ⟨E_L O_i⟩ - ⟨E_L⟩⟨O_i⟩
+        // Build force vector: f_i = <E_L O_i> - <E_L><O_i>
         let mut force = DVector::zeros(n_params);
         for (k, od) in log_derivs.iter().enumerate() {
             for (i, &o) in od.iter().enumerate() {
@@ -233,7 +233,7 @@ impl SROptimizer {
             force[i] -= e_mean * o_mean[i];
         }
         
-        // Solve S · δp = -f
+        // Solve S . dp = -f
         let neg_force = -&force;
         let delta_params = s_matrix.lu().solve(&neg_force)
             .unwrap_or_else(|| {
@@ -288,7 +288,7 @@ impl SROptimizer {
             
             if self.verbose {
                 let error = (variance / energies.len() as f64).sqrt();
-                println!("  Iter {:3}: E = {:10.5} ± {:.4} Ha, σ² = {:.3}, δp = {:?}",
+                println!("  Iter {:3}: E = {:10.5} +/- {:.4} Ha, σ² = {:.3}, dp = {:?}",
                     iter + 1, e_mean, error, variance,
                     delta_params.iter().map(|x| format!("{:.4}", x * self.learning_rate)).collect::<Vec<_>>());
             }
@@ -313,7 +313,7 @@ impl SROptimizer {
             let energy_change = (e_mean - prev_energy).abs();
             if iter > 5 && energy_change < self.tolerance {
                 if self.verbose {
-                    println!("\n  Converged after {} iterations (|δE| = {:.2e} < {:.2e})",
+                    println!("\n  Converged after {} iterations (|dE| = {:.2e} < {:.2e})",
                         iter + 1, energy_change, self.tolerance);
                 }
                 break;
@@ -332,7 +332,7 @@ impl SROptimizer {
         if self.verbose {
             let error = (final_variance / n).sqrt();
             println!("\nFinal results:");
-            println!("  Energy:    {:10.5} ± {:.4} Ha", final_energy, error);
+            println!("  Energy:    {:10.5} +/- {:.4} Ha", final_energy, error);
             println!("  Variance:  {:.4} Ha²", final_variance);
             println!("  Params:    {:?}", wfn.get_params());
         }

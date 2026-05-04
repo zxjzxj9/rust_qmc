@@ -20,11 +20,11 @@ pub struct QuantumPath {
     pub beads: Vec<f64>,
     /// Number of Trotter slices (beads)
     pub n_beads: usize,
-    /// Imaginary time step Δτ = βℏ/M
+    /// Imaginary time step dτ = betahbar/M
     pub dtau: f64,
-    /// Inverse temperature β = 1/(k_B T)
+    /// Inverse temperature beta = 1/(k_B T)
     pub beta: f64,
-    /// Oscillator angular frequency ω
+    /// Oscillator angular frequency w
     pub omega: f64,
     /// Particle mass (in natural units, typically 1.0)
     pub mass: f64,
@@ -35,7 +35,7 @@ impl QuantumPath {
     ///
     /// # Arguments
     /// * `n_beads` - Number of Trotter time slices M
-    /// * `beta` - Inverse temperature β = 1/(k_B T)
+    /// * `beta` - Inverse temperature beta = 1/(k_B T)
     /// * `omega` - Harmonic oscillator frequency
     /// * `mass` - Particle mass (default 1.0 for natural units)
     pub fn new(n_beads: usize, beta: f64, omega: f64, mass: f64) -> Self {
@@ -43,8 +43,8 @@ impl QuantumPath {
         
         // Initialize beads from thermal Gaussian distribution
         let mut rng = rand::thread_rng();
-        // Classical thermal width: σ = sqrt(1/(mω²β)) at high T
-        // Quantum ground state width: σ = sqrt(ℏ/(2mω)) = sqrt(1/(2*omega)) in natural units
+        // Classical thermal width: σ = sqrt(1/(mw²beta)) at high T
+        // Quantum ground state width: σ = sqrt(hbar/(2mw)) = sqrt(1/(2*omega)) in natural units
         let sigma = (1.0 / (mass * omega)).sqrt();
         let dist = Normal::new(0.0, sigma).unwrap();
         
@@ -63,7 +63,7 @@ impl QuantumPath {
     }
 
     /// Compute the kinetic (spring) action contribution between bead i and i+1
-    /// S_kin = (m / 2Δτ) * (x_{i+1} - x_i)²
+    /// S_kin = (m / 2dτ) * (x_{i+1} - x_i)²
     #[inline]
     fn kinetic_action(&self, i: usize) -> f64 {
         let j = (i + 1) % self.n_beads; // PBC: wraps M -> 0
@@ -72,7 +72,7 @@ impl QuantumPath {
     }
 
     /// Compute the potential action contribution at bead i
-    /// S_pot = Δτ * V(x_i) = Δτ * (1/2)mω²x_i²
+    /// S_pot = dτ * V(x_i) = dτ * (1/2)mw²x_i²
     #[inline]
     fn potential_action(&self, i: usize) -> f64 {
         let x = self.beads[i];
@@ -186,7 +186,7 @@ impl QuantumPath {
             let mean = (steps_to_end as f64 * x_start + steps_from_start as f64 * x_end) 
                      / total_steps as f64;
             
-            // Variance for Levy bridge: σ² = (steps_from_start * steps_to_end / total_steps) * Δτ/m
+            // Variance for Levy bridge: σ² = (steps_from_start * steps_to_end / total_steps) * dτ/m
             let variance = (steps_from_start * steps_to_end) as f64 / total_steps as f64 
                          * self.dtau / self.mass;
             let sigma = variance.sqrt();
@@ -225,9 +225,9 @@ impl QuantumPath {
     /// Energy estimator using the virial theorem
     /// 
     /// For harmonic oscillator, the virial theorem gives:
-    /// E = <V> + (1/2)<x × dV/dx> = <V> + <V> = 2<V>
+    /// E = <V> + (1/2)<x x dV/dx> = <V> + <V> = 2<V>
     /// 
-    /// where <V> = (1/2)mω²<x²>
+    /// where <V> = (1/2)mw²<x²>
     /// 
     /// This estimator is exact for harmonic oscillator and has lower variance
     /// than the thermodynamic (primitive) estimator.
@@ -242,14 +242,14 @@ impl QuantumPath {
         
         let mean_x2 = x2_sum / m;
         
-        // <V> = (1/2)mω²<x²>
-        // For harmonic oscillator with virial: E = 2<V> = mω²<x²>
+        // <V> = (1/2)mw²<x²>
+        // For harmonic oscillator with virial: E = 2<V> = mw²<x²>
         self.mass * self.omega * self.omega * mean_x2
     }
 
     /// Thermodynamic (primitive) energy estimator
     /// 
-    /// E = M/(2β) - (m·M)/(2β²) × (1/M)Σᵢ(x_{i+1} - x_i)² + (1/M)Σᵢ V(x_i)
+    /// E = M/(2beta) - (m.M)/(2beta²) x (1/M)Σᵢ(x_{i+1} - x_i)² + (1/M)Σᵢ V(x_i)
     /// 
     /// Note: This estimator can have high variance and may give incorrect results
     /// if not properly converged. Use energy_estimator() (virial) for harmonic oscillator.
@@ -266,9 +266,9 @@ impl QuantumPath {
         }
         
         // Correct primitive estimator: 
-        // E_kin = M/(2β) - m*sum((x_{i+1}-x_i)²)/(2*dtau²)
-        //       = M/(2β) - m*M*<(dx)²>/(2β²/M)
-        //       = M/(2β) - m*M²*<(dx)²>/(2β²)
+        // E_kin = M/(2beta) - m*sum((x_{i+1}-x_i)²)/(2*dtau²)
+        //       = M/(2beta) - m*M*<(dx)²>/(2beta²/M)
+        //       = M/(2beta) - m*M²*<(dx)²>/(2beta²)
         let mean_dx2 = spring_sum / n;
         let kinetic = n / (2.0 * self.beta) 
                     - self.mass * n * n * mean_dx2 / (2.0 * self.beta * self.beta);
@@ -410,8 +410,8 @@ pub fn run_pimc_harmonic(
     println!("=== PIMC Harmonic Oscillator ===");
     println!("Number of paths: {}", n_paths);
     println!("Number of beads (M): {}", n_beads);
-    println!("Inverse temperature β: {:.4}", beta);
-    println!("Frequency ω: {:.4}", omega);
+    println!("Inverse temperature beta: {:.4}", beta);
+    println!("Frequency w: {:.4}", omega);
     println!("Expected ground state energy: {:.6}", 0.5 * omega);
     println!();
 
@@ -478,10 +478,10 @@ pub fn run_pimc_harmonic(
     println!();
     println!("=== Results ===");
     println!("Ground state energy (expected: {:.6}):", 0.5 * omega);
-    println!("  E = {:.6} ± {:.6}", mean_e, stderr_e);
+    println!("  E = {:.6} +/- {:.6}", mean_e, stderr_e);
     println!();
     println!("Position variance <x²> (expected from QM: {:.6}):", 0.5 / (mass * omega));
-    println!("  <x²> = {:.6} ± {:.6}", mean_x2, stderr_x2);
+    println!("  <x²> = {:.6} +/- {:.6}", mean_x2, stderr_x2);
     println!();
     println!("Final acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
 
@@ -517,7 +517,7 @@ pub trait Potential: Clone + Send + Sync {
     fn init_width(&self) -> f64;
 }
 
-/// Harmonic oscillator potential: V(x) = (1/2)mω²x²
+/// Harmonic oscillator potential: V(x) = (1/2)mw²x²
 #[derive(Clone)]
 pub struct HarmonicPotential {
     pub mass: f64,
@@ -542,15 +542,15 @@ impl Potential for HarmonicPotential {
     }
 }
 
-/// Sombrero (Mexican Hat) potential: V(x) = -μ²x²/2 + λx⁴/4
+/// Sombrero (Mexican Hat) potential: V(x) = -mu²x²/2 + lambdax⁴/4
 /// 
-/// This is a double-well potential with minima at x = ±√(μ²/λ)
-/// The barrier height is V(0) - V(x_min) = μ⁴/(4λ)
+/// This is a double-well potential with minima at x = +/-sqrt(mu²/lambda)
+/// The barrier height is V(0) - V(x_min) = mu⁴/(4lambda)
 #[derive(Clone)]
 pub struct SombreroPotential {
-    /// μ² coefficient (controls well depth)
+    /// mu² coefficient (controls well depth)
     pub mu_squared: f64,
-    /// λ coefficient (controls quartic term)
+    /// lambda coefficient (controls quartic term)
     pub lambda: f64,
 }
 
@@ -558,15 +558,15 @@ impl SombreroPotential {
     /// Create a sombrero potential with specified barrier height and well positions
     /// 
     /// # Arguments
-    /// * `well_position` - Location of the minima at x = ±x_min
+    /// * `well_position` - Location of the minima at x = +/-x_min
     /// * `barrier_height` - Height of the barrier at x=0 above the minima
     pub fn from_geometry(well_position: f64, barrier_height: f64) -> Self {
-        // x_min = √(μ²/λ), so μ²/λ = x_min²
-        // barrier = μ⁴/(4λ), so μ⁴ = 4λ × barrier
-        // From x_min²: μ² = λ × x_min², so μ⁴ = λ² × x_min⁴
-        // Therefore: λ² × x_min⁴ = 4λ × barrier
-        // λ = 4 × barrier / x_min⁴
-        // μ² = λ × x_min² = 4 × barrier / x_min²
+        // x_min = sqrt(mu²/lambda), so mu²/lambda = x_min²
+        // barrier = mu⁴/(4lambda), so mu⁴ = 4lambda x barrier
+        // From x_min²: mu² = lambda x x_min², so mu⁴ = lambda² x x_min⁴
+        // Therefore: lambda² x x_min⁴ = 4lambda x barrier
+        // lambda = 4 x barrier / x_min⁴
+        // mu² = lambda x x_min² = 4 x barrier / x_min²
         let lambda = 4.0 * barrier_height / well_position.powi(4);
         let mu_squared = lambda * well_position.powi(2);
         Self { mu_squared, lambda }
@@ -589,7 +589,7 @@ impl Potential for SombreroPotential {
     }
     
     fn force(&self, x: f64) -> f64 {
-        // F = -dV/dx = μ²x - λx³
+        // F = -dV/dx = mu²x - lambdax³
         self.mu_squared * x - self.lambda * x.powi(3)
     }
     
@@ -604,7 +604,7 @@ impl Potential for SombreroPotential {
 
 /// Double-well potential: V(x) = a(x² - b²)²
 /// 
-/// Minima at x = ±b, barrier height = ab⁴
+/// Minima at x = +/-b, barrier height = ab⁴
 #[derive(Clone)]
 pub struct DoubleWellPotential {
     pub a: f64,
@@ -631,12 +631,12 @@ impl Potential for DoubleWellPotential {
     }
 }
 
-/// Proton transfer double-well potential for O−H···O hydrogen bond tunneling
+/// Proton transfer double-well potential for O-H...O hydrogen bond tunneling
 ///
-/// V(x) = V_b × (x²/d² - 1)²
+/// V(x) = V_b x (x²/d² - 1)²
 ///
 /// This models a symmetric double well with:
-/// - Minima at x = ±d (donor and acceptor sites)
+/// - Minima at x = +/-d (donor and acceptor sites)
 /// - Barrier height V_b at x = 0
 /// - Typical parameters: d ~ 0.5–1.0 Bohr, V_b ~ 0.01–0.05 Hartree
 ///
@@ -646,7 +646,7 @@ impl Potential for DoubleWellPotential {
 pub struct ProtonTransferPotential {
     /// Barrier height at x=0, in Hartree
     pub barrier_height: f64,
-    /// Half-distance between wells (±d), in Bohr
+    /// Half-distance between wells (+/-d), in Bohr
     pub well_distance: f64,
     /// Optional asymmetry: tilt ε adds a linear term εx to break symmetry
     pub asymmetry: f64,
@@ -665,7 +665,7 @@ impl ProtonTransferPotential {
     }
 
     /// Effective frequency at the bottom of a well (harmonic approximation)
-    /// ω = √(V''(±d)/m) where V''(±d) = 8 V_b / d²
+    /// w = sqrt(V''(+/-d)/m) where V''(+/-d) = 8 V_b / d²
     pub fn well_frequency(&self, mass: f64) -> f64 {
         (8.0 * self.barrier_height / (self.well_distance * self.well_distance * mass)).sqrt()
     }
@@ -925,10 +925,10 @@ pub fn run_pimc_sombrero(
     println!("=== PIMC Sombrero (Mexican Hat) Potential ===");
     println!("Number of paths: {}", n_paths);
     println!("Number of beads (M): {}", n_beads);
-    println!("Inverse temperature β: {:.4}", beta);
-    println!("Well positions: ±{:.4}", potential.well_position());
+    println!("Inverse temperature beta: {:.4}", beta);
+    println!("Well positions: +/-{:.4}", potential.well_position());
     println!("Barrier height: {:.4}", potential.barrier_height());
-    println!("μ² = {:.4}, λ = {:.4}", potential.mu_squared, potential.lambda);
+    println!("mu² = {:.4}, lambda = {:.4}", potential.mu_squared, potential.lambda);
     println!();
 
     let mass = 1.0;
@@ -981,7 +981,7 @@ pub fn run_pimc_sombrero(
 
     println!();
     println!("=== Results ===");
-    println!("Ground state energy: E = {:.6} ± {:.6}", mean_e, stderr_e);
+    println!("Ground state energy: E = {:.6} +/- {:.6}", mean_e, stderr_e);
     println!("Average position <x>: {:.6}", mean_x);
     println!("Position variance <x²>: {:.6}", mean_x2);
     println!("Acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
@@ -1033,7 +1033,7 @@ mod tests {
 
     #[test]
     fn test_energy_estimator_reasonable() {
-        // At low temperature (large β), should approach ground state E₀ = 0.5
+        // At low temperature (large beta), should approach ground state E0 = 0.5
         // Note: the primitive estimator for a single unequilibrated path
         // can give negative values, so we just check for NaN/infinity
         let path = QuantumPath::new(64, 20.0, 1.0, 1.0);

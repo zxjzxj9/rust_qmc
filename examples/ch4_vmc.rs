@@ -55,11 +55,11 @@ fn main() {
     println!("Molecular Geometry:");
     println!("  Carbon:    (0, 0, 0)");
     println!("  H atoms:   tetrahedral arrangement");
-    println!("  C-H bond:  2.05 Bohr (~1.085 Å)");
+    println!("  C-H bond:  2.05 Bohr (~1.085 A)");
     println!();
     
     println!("Wavefunction:");
-    println!("  Type:      Slater-Jastrow (5↑ × 5↓ × J)");
+    println!("  Type:      Slater-Jastrow (5↑ x 5↓ x J)");
     println!("  Electrons: 10 (6 from C, 4 from H)");
     println!("  MOs:       5 doubly-occupied");
     println!("  Jastrow:   cusp = {:.2}", args.cusp);
@@ -103,8 +103,8 @@ fn run_random_walk(wavefunction: Methane, args: &Args) {
 
     println!("\nResults:");
     println!("--------");
-    println!("Total energy:        {:.6} ± {:.6} Ha", results.energy, results.error);
-    println!("Total energy:        {:.4} ± {:.4} eV", 
+    println!("Total energy:        {:.6} +/- {:.6} Ha", results.energy, results.error);
+    println!("Total energy:        {:.4} +/- {:.4} eV", 
         results.energy * HA_TO_EV, results.error * HA_TO_EV);
     println!();
     println!("Autocorrelation:     {:.2} steps", results.autocorrelation_time);
@@ -132,8 +132,8 @@ fn run_drift_diffusion(wavefunction: Methane, args: &Args) {
 
     println!("\nResults:");
     println!("--------");
-    println!("Total energy:        {:.6} ± {:.6} Ha", results.energy, results.error);
-    println!("Total energy:        {:.4} ± {:.4} eV", 
+    println!("Total energy:        {:.6} +/- {:.6} Ha", results.energy, results.error);
+    println!("Total energy:        {:.4} +/- {:.4} eV", 
         results.energy * HA_TO_EV, results.error * HA_TO_EV);
     println!();
     println!("Acceptance rate:     {:.1}% per electron", results.acceptance_rate * 100.0);

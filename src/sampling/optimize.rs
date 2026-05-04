@@ -235,7 +235,7 @@ impl JastrowOptimizer {
                 variance_history.push(stats.variance);
                 
                 if self.verbose {
-                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} ± {:.4}, σ²={:.2}",
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, σ²={:.2}",
                         b_ee, b_en, stats.energy, stats.error, stats.variance);
                 }
                 
@@ -272,7 +272,7 @@ impl JastrowOptimizer {
                 variance_history.push(stats.variance);
                 
                 if self.verbose {
-                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} ± {:.4}, σ²={:.2}",
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, σ²={:.2}",
                         b_ee, b_en, stats.energy, stats.error, stats.variance);
                 }
                 
