@@ -22,8 +22,8 @@ fn main() {
     println!("|     (Mexican Hat / Double-Well with Quantum Tunneling)       |");
     println!("================================================================");
     println!();
-    println!("The sombrero potential: V(x) = -mu²x²/2 + lambdax⁴/4");
-    println!("                            = {}(x² - {}²)²", 
+    println!("The sombrero potential: V(x) = -mu^2*x^2/2 + lambda*x^4/4");
+    println!("                            = {}(x^2 - {}^2)^2", 
              barrier_height / well_position.powi(4), well_position);
     println!();
     println!("Physical insight:");
@@ -46,7 +46,7 @@ fn main() {
     println!();
     println!("================================================================");
     println!("|  Files written:                                              |");
-    println!("|    sombrero_wavefunction.txt - |ψ(x)|² histogram            |");
+    println!("|    sombrero_wavefunction.txt - |psi(x)|^2 histogram          |");
     println!("|    sombrero_energies.txt     - energy vs step               |");
     println!("================================================================");
 }

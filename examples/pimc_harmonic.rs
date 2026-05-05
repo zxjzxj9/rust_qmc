@@ -37,6 +37,6 @@ fn main() {
     println!("================================================================");
     println!("|  For ground state of harmonic oscillator:                    |");
     println!("|    E0 = 0.5hbarw = 0.5 (in natural units where hbar=m=w=1)          |");
-    println!("|    <x²> = hbar/(2mw) = 0.5                                      |");
+    println!("|    <x^2> = hbar/(2mw) = 0.5                                      |");
     println!("================================================================");
 }

@@ -22,7 +22,7 @@ fn main() {
     println!("|               Hydrogen Atom (1 electron)                     |");
     println!("================================================================");
     println!();
-    println!("Trial wavefunction: Ψ_T = exp(-alphar) with alpha = {:.2}", alpha);
+    println!("Trial wavefunction: Psi_T = exp(-alpha*r) with alpha = {:.2}", alpha);
     println!();
     println!("Physical insight:");
     println!("  - 1s orbital has NO NODES -> fixed-node is EXACT");
@@ -44,6 +44,6 @@ fn main() {
     println!("|  Exact results for hydrogen ground state:                    |");
     println!("|    E0 = -0.5 Hartree = -13.606 eV                           |");
     println!("|    <r> = 1.5 a0 = 0.794 A                                   |");
-    println!("|    <r²> = 3.0 a0²                                           |");
+    println!("|    <r^2> = 3.0 a0^2                                           |");
     println!("================================================================");
 }
