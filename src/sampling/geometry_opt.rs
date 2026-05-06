@@ -272,7 +272,7 @@ impl GeometryOptimizer {
                 if self.verbose && iter < 5 {
                     // Print individual forces and variance for first few steps
                     for (i, f) in mean_forces.iter().enumerate() {
-                        println!("           F[{}] = ({:+.4}, {:+.4}, {:+.4}) |F|={:.4}  σ²={:.4}",
+                        println!("           F[{}] = ({:+.4}, {:+.4}, {:+.4}) |F|={:.4}  var={:.4}",
                             i, f.x, f.y, f.z, f.norm(), force_var[i]);
                     }
                 }

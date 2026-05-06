@@ -401,7 +401,7 @@ impl<T: MultiWfn + EnergyCalculator + ForceCalculator + Clone> ImportanceSampled
 
         // —— Phase 3: Burn-in ——
         if self.params.print_interval > 0 {
-            println!("IS-DMC burn-in ({} steps, {} walkers, τ={:.4})...",
+            println!("IS-DMC burn-in ({} steps, {} walkers, tau={:.4})...",
                 self.params.n_burnin, self.params.n_walkers, self.time_step);
         }
 

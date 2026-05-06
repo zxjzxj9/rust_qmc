@@ -288,7 +288,7 @@ impl SROptimizer {
             
             if self.verbose {
                 let error = (variance / energies.len() as f64).sqrt();
-                println!("  Iter {:3}: E = {:10.5} +/- {:.4} Ha, σ² = {:.3}, dp = {:?}",
+                println!("  Iter {:3}: E = {:10.5} +/- {:.4} Ha, var = {:.3}, dp = {:?}",
                     iter + 1, e_mean, error, variance,
                     delta_params.iter().map(|x| format!("{:.4}", x * self.learning_rate)).collect::<Vec<_>>());
             }
@@ -333,7 +333,7 @@ impl SROptimizer {
             let error = (final_variance / n).sqrt();
             println!("\nFinal results:");
             println!("  Energy:    {:10.5} +/- {:.4} Ha", final_energy, error);
-            println!("  Variance:  {:.4} Ha²", final_variance);
+            println!("  Variance:  {:.4} Ha^2", final_variance);
             println!("  Params:    {:?}", wfn.get_params());
         }
         

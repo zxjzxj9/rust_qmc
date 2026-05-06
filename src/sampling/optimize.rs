@@ -235,7 +235,7 @@ impl JastrowOptimizer {
                 variance_history.push(stats.variance);
                 
                 if self.verbose {
-                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, σ²={:.2}",
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, var={:.2}",
                         b_ee, b_en, stats.energy, stats.error, stats.variance);
                 }
                 
@@ -248,7 +248,7 @@ impl JastrowOptimizer {
         }
         
         if self.verbose {
-            println!("\nBest from coarse grid: b_ee={:.4}, b_en={:.4}, E={:.4}, σ²={:.4}",
+            println!("\nBest from coarse grid: b_ee={:.4}, b_en={:.4}, E={:.4}, var={:.4}",
                 best_params.b_ee, best_params.b_en, best_energy, best_variance);
             println!("\nPhase 2: Fine Grid Search");
         }
@@ -272,7 +272,7 @@ impl JastrowOptimizer {
                 variance_history.push(stats.variance);
                 
                 if self.verbose {
-                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, σ²={:.2}",
+                    println!("  b_ee={:.2}, b_en={:.2}: E={:8.4} +/- {:.4}, var={:.2}",
                         b_ee, b_en, stats.energy, stats.error, stats.variance);
                 }
                 
@@ -285,7 +285,7 @@ impl JastrowOptimizer {
         }
         
         if self.verbose {
-            println!("\nBest from fine grid: b_ee={:.4}, b_en={:.4}, E={:.4}, σ²={:.4}",
+            println!("\nBest from fine grid: b_ee={:.4}, b_en={:.4}, E={:.4}, var={:.4}",
                 best_params.b_ee, best_params.b_en, best_energy, best_variance);
         }
         

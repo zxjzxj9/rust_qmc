@@ -533,7 +533,7 @@ pub fn run_pimc_hydrogen(
     println!("Number of paths: {}", n_paths);
     println!("Number of beads (M): {}", n_beads);
     println!("Inverse temperature beta: {:.4}", beta);
-    println!("Trial wavefunction: Ψ = exp(-{:.4}r)", alpha);
+    println!("Trial wavefunction: Psi = exp(-{:.4}r)", alpha);
     println!("Expected ground state: E0 = -0.5 Hartree");
     println!();
 

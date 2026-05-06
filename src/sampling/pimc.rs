@@ -457,7 +457,7 @@ pub fn run_pimc_harmonic(
         
         if step % (n_production / 10).max(1) == 0 {
             println!(
-                "  Step {:6}: E = {:10.6}, <x²> = {:10.6}",
+                "  Step {:6}: E = {:10.6}, <x^2> = {:10.6}",
                 step, e, x2
             );
         }
@@ -480,8 +480,8 @@ pub fn run_pimc_harmonic(
     println!("Ground state energy (expected: {:.6}):", 0.5 * omega);
     println!("  E = {:.6} +/- {:.6}", mean_e, stderr_e);
     println!();
-    println!("Position variance <x²> (expected from QM: {:.6}):", 0.5 / (mass * omega));
-    println!("  <x²> = {:.6} +/- {:.6}", mean_x2, stderr_x2);
+    println!("Position variance <x^2> (expected from QM: {:.6}):", 0.5 / (mass * omega));
+    println!("  <x^2> = {:.6} +/- {:.6}", mean_x2, stderr_x2);
     println!();
     println!("Final acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
 
@@ -928,7 +928,7 @@ pub fn run_pimc_sombrero(
     println!("Inverse temperature beta: {:.4}", beta);
     println!("Well positions: +/-{:.4}", potential.well_position());
     println!("Barrier height: {:.4}", potential.barrier_height());
-    println!("mu² = {:.4}, lambda = {:.4}", potential.mu_squared, potential.lambda);
+    println!("mu^2 = {:.4}, lambda = {:.4}", potential.mu_squared, potential.lambda);
     println!();
 
     let mass = 1.0;
@@ -964,7 +964,7 @@ pub fn run_pimc_sombrero(
         
         if step % (n_production / 10).max(1) == 0 {
             println!(
-                "  Step {:6}: E = {:10.6}, <x> = {:10.6}, <x²> = {:10.6}",
+                "  Step {:6}: E = {:10.6}, <x> = {:10.6}, <x^2> = {:10.6}",
                 step, e, x, sim.average_x_squared()
             );
         }
@@ -983,7 +983,7 @@ pub fn run_pimc_sombrero(
     println!("=== Results ===");
     println!("Ground state energy: E = {:.6} +/- {:.6}", mean_e, stderr_e);
     println!("Average position <x>: {:.6}", mean_x);
-    println!("Position variance <x²>: {:.6}", mean_x2);
+    println!("Position variance <x^2>: {:.6}", mean_x2);
     println!("Acceptance rate: {:.2}%", 100.0 * sim.acceptance_rate());
 
     // Build and output wavefunction histogram
