@@ -59,7 +59,7 @@ fn main() {
     println!();
     
     println!("Wavefunction:");
-    println!("  Type:      Slater-Jastrow (5↑ x 5↓ x J)");
+    println!("  Type:      Slater-Jastrow (5up x 5dn x J)");
     println!("  Electrons: 10 (6 from C, 4 from H)");
     println!("  MOs:       5 doubly-occupied");
     println!("  Jastrow:   cusp = {:.2}", args.cusp);

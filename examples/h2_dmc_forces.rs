@@ -56,7 +56,7 @@ fn main() {
     println!("  Walkers:    {}", args.walkers);
     println!("  Steps:      {}", args.steps);
     println!("  Burn-in:    {}", args.burnin);
-    println!("  τ:          {:.4}", args.tau);
+    println!("  tau:        {:.4}", args.tau);
     println!("  Scan pts:   {}", args.points);
     println!();
 
@@ -127,7 +127,7 @@ fn main() {
     println!("|                           Summary: E(R) and F(R)                            |");
     println!("================================================================================");
     println!("|  R(a0) |   E (Ha)   | +/-error   |  F_mixed   |  F_extrap  |  -dE/dR    | d(%)|");
-    println!("=========╬============╬==========╬============╬============╬============╬=======");
+    println!("=========+============+==========+============+============+============+=======");
 
     for (i, &(r, e, err, f_mix, f_ext, _f_vmc)) in results.iter().enumerate() {
         // Numerical dE/dR for comparison
@@ -161,10 +161,10 @@ fn main() {
     println!("================================================================================");
     println!();
     println!("Notes:");
-    println!("  • F_mixed  = DMC mixed estimator <Ψ0|F_HF|Ψ_T> (z-component on nucleus 1)");
-    println!("  • F_extrap = 2xF_mixed - F_VMC  (extrapolated estimator, most accurate)");
-    println!("  • -dE/dR   = numerical derivative from E(R) curve (for comparison)");
-    println!("  • d(%)     = |F_extrap - (-dE/dR)| / |-dE/dR| x 100");
-    println!("  • Exact H2 equilibrium: R ~ 1.401 Bohr, E ~ -1.17448 Ha");
-    println!("  • At equilibrium, force should be ~ 0 (switching from attractive to repulsive)");
+    println!("  - F_mixed  = DMC mixed estimator <Psi0|F_HF|Psi_T> (z-component on nucleus 1)");
+    println!("  - F_extrap = 2xF_mixed - F_VMC  (extrapolated estimator, most accurate)");
+    println!("  - -dE/dR   = numerical derivative from E(R) curve (for comparison)");
+    println!("  - d(%)     = |F_extrap - (-dE/dR)| / |-dE/dR| x 100");
+    println!("  - Exact H2 equilibrium: R ~ 1.401 Bohr, E ~ -1.17448 Ha");
+    println!("  - At equilibrium, force should be ~ 0 (switching from attractive to repulsive)");
 }

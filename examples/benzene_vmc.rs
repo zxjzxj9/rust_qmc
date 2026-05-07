@@ -64,12 +64,12 @@ fn main() {
     println!("============================");
     println!();
     println!("Features:");
-    println!("  • 6-31G split-valence basis (66 AOs) with analytical derivatives");
-    println!("  • 21 doubly-occupied MOs (σ core + σ bond + π orbitals)");
-    println!("  • 42 electrons (21 up, 21 down)");
-    println!("  • Spin-dependent e-e Jastrow (a=0.5 anti, 0.25 para)");
-    println!("  • Electron-nucleus Jastrow with Kato cusp");
-    println!("  • 4 optimizable Jastrow parameters");
+    println!("  - 6-31G split-valence basis (66 AOs) with analytical derivatives");
+    println!("  - 21 doubly-occupied MOs (sigma core + sigma bond + pi orbitals)");
+    println!("  - 42 electrons (21 up, 21 down)");
+    println!("  - Spin-dependent e-e Jastrow (a=0.5 anti, 0.25 para)");
+    println!("  - Electron-nucleus Jastrow with Kato cusp");
+    println!("  - 4 optimizable Jastrow parameters");
     println!();
     println!("Initial Jastrow Parameters:");
     println!("  b_ee = {:.2} (electron-electron decay)", args.b_ee);
@@ -201,9 +201,9 @@ fn print_results(
         } else if diff < 30.0 {
             println!("o Within 30 Ha of HF - reasonable, try --optimize");
         } else {
-            println!("△ More than 30 Ha from HF - consider --optimize");
+            println!("[~] More than 30 Ha from HF - consider --optimize");
         }
     } else {
-        println!("⚠ Energy outside expected range - check wavefunction");
+        println!("[!] Energy outside expected range - check wavefunction");
     }
 }

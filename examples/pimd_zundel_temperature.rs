@@ -248,13 +248,13 @@ fn main() {
                 100.0 * (1.0 - high.q_barrier / high.cl_barrier)
             } else { 0.0 };
 
-            println!("  • At T = {} K: barrier reduced by {:.0}%  -> tunneling dominates",
+            println!("  - At T = {} K: barrier reduced by {:.0}%  -> tunneling dominates",
                      low.temp_k as u32, low_red);
-            println!("  • At T = {} K: barrier reduced by {:.0}%  -> thermal activation dominates",
+            println!("  - At T = {} K: barrier reduced by {:.0}%  -> thermal activation dominates",
                      high.temp_k as u32, high_red);
 
             if low.q_rg > high.q_rg * 1.3 {
-                println!("  • Proton delocalization (R_g) increases {:.1}x from {} K to {} K",
+                println!("  - Proton delocalization (R_g) increases {:.1}x from {} K to {} K",
                          low.q_rg / high.q_rg.max(0.001),
                          high.temp_k as u32, low.temp_k as u32);
             }
@@ -262,7 +262,7 @@ fn main() {
     }
 
     if let Some(tc) = crossover {
-        println!("  • Crossover temperature T_c ~ {} K (barrier reduction drops below 50%)", tc as u32);
+        println!("  - Crossover temperature T_c ~ {} K (barrier reduction drops below 50%)", tc as u32);
         println!("    Below T_c: quantum regime (tunneling through barrier)");
         println!("    Above T_c: classical regime (thermal hopping over barrier)");
     }
@@ -272,7 +272,7 @@ fn main() {
         let low = &results[0];
         let zpe = low.q_energy - low.cl_energy;
         if zpe > 0.0 {
-            println!("  • Zero-point energy at {} K: +{:.4} Ha ({:.1} kcal/mol)",
+            println!("  - Zero-point energy at {} K: +{:.4} Ha ({:.1} kcal/mol)",
                      low.temp_k as u32, zpe, zpe * 627.509);
         }
     }
@@ -280,7 +280,7 @@ fn main() {
     println!();
     println!("  Conclusion: Quantum effects (tunneling + ZPE) substantially reduce the");
     println!("  effective proton transfer barrier at low temperatures. The effect is");
-    println!("  most pronounced below ~200–300 K where the thermal de Broglie wavelength");
+    println!("  most pronounced below ~200-300 K where the thermal de Broglie wavelength");
     println!("  of the proton becomes comparable to the barrier width.");
 
     // =========================================================================

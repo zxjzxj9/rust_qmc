@@ -124,7 +124,7 @@ fn main() {
     println!("  Spin up / down:      {} / {}", heg_display.num_up, heg_display.num_down);
     println!("  Wigner-Seitz rs:     {:.2} Bohr", args.rs);
     println!("  Box length L:        {:.4} Bohr", heg_display.box_length);
-    println!("  Density n:           {:.6} electrons/Bohr³", 
+    println!("  Density n:           {:.6} electrons/Bohr^3", 
         args.electrons as f64 / heg_display.box_length.powi(3));
     println!("  Jastrow F:           {:.2}", jastrow_f);
     println!("  Jastrow form:        {:?}", jastrow_form);
@@ -141,7 +141,7 @@ fn main() {
     println!("Reference Values:");
     println!("=================");
     println!("  Hartree-Fock E/N:    {:.6} Ha ({:.4} eV)", e_hf, e_hf * HA_TO_EV);
-    println!("  CA Correlation εc:   {:.6} Ha ({:.4} eV)", e_c_ref, e_c_ref * HA_TO_EV);
+    println!("  CA Correlation ec:   {:.6} Ha ({:.4} eV)", e_c_ref, e_c_ref * HA_TO_EV);
     println!("  Expected total E/N:  {:.6} Ha", e_hf + e_c_ref);
     println!();
 
@@ -165,7 +165,7 @@ fn main() {
     
     for (i, twist) in twist_grid.iter().enumerate() {
         if num_twists > 1 && (i == 0 || (i + 1) % 10 == 0 || i == num_twists - 1) {
-            println!("  Twist {}/{}: θ = ({:.3}, {:.3}, {:.3})", 
+            println!("  Twist {}/{}: theta = ({:.3}, {:.3}, {:.3})", 
                 i + 1, num_twists, twist.x, twist.y, twist.z);
         }
         
@@ -207,8 +207,8 @@ fn main() {
         energy_per_electron * HA_TO_EV, error_per_electron * HA_TO_EV);
     println!("|                                                              |");
     println!("  Hartree-Fock E/N:    {:.6} Ha", e_hf);
-    println!("  VMC correlation εc:  {:.6} +/- {:.6} Ha", correlation_estimate, error_per_electron);
-    println!("  CA reference εc:     {:.6} Ha", e_c_ref);
+    println!("  VMC correlation ec:  {:.6} +/- {:.6} Ha", correlation_estimate, error_per_electron);
+    println!("  CA reference ec:     {:.6} Ha", e_c_ref);
     println!("  Difference:          {:.6} Ha ({:.1}%)", 
         correlation_estimate - e_c_ref,
         100.0 * (correlation_estimate - e_c_ref).abs() / e_c_ref.abs());
@@ -219,7 +219,7 @@ fn main() {
     // Summary for LDA usage
     println!("For LDA parameterization:");
     println!("==========================");
-    println!("  rs = {:.2}  ->  εc = {:.6} Ha/electron", args.rs, correlation_estimate);
+    println!("  rs = {:.2}  ->  ec = {:.6} Ha/electron", args.rs, correlation_estimate);
     println!();
     println!("Run at multiple rs values (1, 2, 5, 10, 20, 50, 100) to fit LDA functional.");
 }

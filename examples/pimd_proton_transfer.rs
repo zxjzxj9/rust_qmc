@@ -41,8 +41,8 @@ fn main() {
     println!("================================================================");
     println!();
     println!("A proton in a double-well potential:");
-    println!("  • Classically (P=1): stays trapped in the starting well");
-    println!("  • Quantum (P=32): ring polymer spreads across the barrier");
+    println!("  - Classically (P=1): stays trapped in the starting well");
+    println!("  - Quantum (P=32): ring polymer spreads across the barrier");
     println!("    -> beads populate BOTH wells = quantum tunneling!");
     println!();
 
@@ -61,7 +61,7 @@ fn main() {
     println!();
     println!("================================================================");
     println!("|  Output files:                                              |");
-    println!("|    pimd_position_distribution.txt  -- |ψ(x)|² histogram     |");
+    println!("|    pimd_position_distribution.txt  -- |psi(x)|^2 histogram  |");
     println!("|    pimd_proton_transfer.txt        -- energy trajectory      |");
     println!("|    pimd_bead_snapshot.txt           -- bead positions        |");
     println!("================================================================");

@@ -45,10 +45,10 @@ fn main() {
     println!("|   The Grotthuss mechanism of proton conduction              |");
     println!("|                                                             |");
     println!("|   Features:                                                 |");
-    println!("|   • Analytical EVB forces (Hellmann-Feynman)               |");
-    println!("|   • H/D kinetic isotope effect                             |");
-    println!("|   • Free energy profile W(d)                               |");
-    println!("|   • R_OO vs d correlation                                  |");
+    println!("|   - Analytical EVB forces (Hellmann-Feynman)               |");
+    println!("|   - H/D kinetic isotope effect                             |");
+    println!("|   - Free energy profile W(d)                               |");
+    println!("|   - R_OO vs d correlation                                  |");
     println!("================================================================");
     println!();
 

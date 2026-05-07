@@ -54,7 +54,7 @@ fn main() {
     println!();
     println!("  Final energy:    {:.5} Ha ({:.2} eV)", 
         result.final_energy, result.final_energy * HA_TO_EV);
-    println!("  Final variance:  {:.4} Ha²", result.final_variance);
+    println!("  Final variance:  {:.4} Ha^2", result.final_variance);
     println!("  Final error:     {:.4} Ha",
         (result.final_variance / 5000.0).sqrt());
     println!();

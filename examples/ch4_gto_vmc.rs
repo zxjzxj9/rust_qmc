@@ -65,11 +65,11 @@ fn main() {
     println!("========================================");
     println!();
     println!("Features:");
-    println!("  • 6-31G split-valence basis (17 AOs) with analytical derivatives");
-    println!("  • Proper RHF/6-31G MO coefficients");
-    println!("  • Spin-dependent e-e Jastrow (a=0.5 anti, 0.25 para)");
-    println!("  • Electron-nucleus Jastrow with Kato cusp");
-    println!("  • 4 optimizable Jastrow parameters (b_ee, b_en, a_anti, a_para)");
+    println!("  - 6-31G split-valence basis (17 AOs) with analytical derivatives");
+    println!("  - Proper RHF/6-31G MO coefficients");
+    println!("  - Spin-dependent e-e Jastrow (a=0.5 anti, 0.25 para)");
+    println!("  - Electron-nucleus Jastrow with Kato cusp");
+    println!("  - 4 optimizable Jastrow parameters (b_ee, b_en, a_anti, a_para)");
     println!();
     println!("Initial Jastrow Parameters:");
     println!("  b_ee = {:.2} (electron-electron decay)", args.b_ee);
@@ -201,9 +201,9 @@ fn print_results(
         } else if diff < 5.0 {
             println!("o Within 5 Ha of experimental value - reasonable accuracy");
         } else {
-            println!("△ More than 5 Ha from experimental - consider --optimize");
+            println!("[~] More than 5 Ha from experimental - consider --optimize");
         }
     } else {
-        println!("⚠ Energy outside expected range - check wavefunction");
+        println!("[!] Energy outside expected range - check wavefunction");
     }
 }

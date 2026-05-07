@@ -198,7 +198,7 @@ fn main() {
         .enumerate()
     {
         let label = if charges[i] > 5.0 { "C" } else { "H" };
-        println!("  F[{}{}] = ({:+.5}, {:+.5}, {:+.5})  |F|={:.5}  σ²={:.4}",
+        println!("  F[{}{}] = ({:+.5}, {:+.5}, {:+.5})  |F|={:.5}  var={:.4}",
             label, i, f.x, f.y, f.z, f.norm(), var);
     }
     println!();
@@ -219,7 +219,7 @@ fn main() {
 
     // Summary comparison
     println!("--- Summary ---");
-    println!("  {:>8}  {:>12}  {:>12}  {:>12}", "Nucleus", "Bare |F|", "ZV |F|", "Bare σ²");
+    println!("  {:>8}  {:>12}  {:>12}  {:>12}", "Nucleus", "Bare |F|", "ZV |F|", "Bare var");
     println!("  {:>8}  {:>12}  {:>12}  {:>12}", "-------", "--------", "------", "------");
     for (i, ((bf, zf), var)) in bare_result.bare_forces.iter()
         .zip(zv_forces.iter())
