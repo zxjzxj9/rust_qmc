@@ -17,7 +17,6 @@
 //!   J. Chem. Phys. 133, 124104
 
 use rand_distr::{Distribution, Normal};
-use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
