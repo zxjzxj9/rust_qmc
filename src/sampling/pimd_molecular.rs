@@ -17,6 +17,7 @@
 //!   J. Chem. Phys. 133, 124104
 
 use rand_distr::{Distribution, Normal};
+use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
@@ -179,17 +180,24 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
     }
 
     /// Compute total forces on each bead: F = F_spring + F_physical
+    ///
+    /// Phase 1: physical forces computed in parallel across beads (independent)
+    /// Phase 2: spring forces added sequentially (depends on neighbors)
     pub fn compute_forces(&mut self) {
         let ndof = self.ndof;
+        let potential = &self.potential;
 
+        // Phase 1: compute physical forces in parallel (each bead is independent)
+        self.forces.par_iter_mut()
+            .zip(self.positions.par_iter())
+            .for_each(|(f, pos)| {
+                potential.forces(pos, f);
+            });
+
+        // Phase 2: add spring forces (depends on neighboring bead positions)
         for i in 0..self.n_beads {
             let prev = if i == 0 { self.n_beads - 1 } else { i - 1 };
             let next = (i + 1) % self.n_beads;
-
-            // Physical forces from potential
-            self.potential.forces(&self.positions[i], &mut self.forces[i]);
-
-            // Add spring forces: F_spring[d] = -κ_d (2 x[i][d] - x[prev][d] - x[next][d])
             for d in 0..ndof {
                 let f_spring = -self.spring_dof[d]
                     * (2.0 * self.positions[i][d]
@@ -217,7 +225,7 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
 
     /// Bead-averaged potential energy: (1/P) Σ_i V(R_i)
     pub fn potential_energy(&self) -> f64 {
-        self.positions.iter()
+        self.positions.par_iter()
             .map(|pos| self.potential.energy(pos))
             .sum::<f64>() / self.n_beads as f64
     }
@@ -232,21 +240,20 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
         let ndof = self.ndof;
         let p = self.n_beads as f64;
 
-        let mut sum = 0.0;
-        let mut phys_forces = vec![0.0; ndof];
-
-        for i in 0..self.n_beads {
-            // Get physical forces (without spring contribution)
-            self.potential.forces(&self.positions[i], &mut phys_forces);
-
-            let v_i = self.potential.energy(&self.positions[i]);
-            let mut virial = 0.0;
-            for d in 0..ndof {
-                // ∂V/∂R = -F_phys, so (R-R̄).(∂V/∂R) = -(R-R̄).F
-                virial += (self.positions[i][d] - cent[d]) * (-phys_forces[d]);
-            }
-            sum += v_i + 0.5 * virial;
-        }
+        // Compute per-bead virial contributions in parallel
+        let sum: f64 = self.positions.par_iter()
+            .map(|pos| {
+                let mut phys_forces = vec![0.0; ndof];
+                self.potential.forces(pos, &mut phys_forces);
+                let v_i = self.potential.energy(pos);
+                let mut virial = 0.0;
+                for d in 0..ndof {
+                    // ∂V/∂R = -F_phys, so (R-R̄).(∂V/∂R) = -(R-R̄).F
+                    virial += (pos[d] - cent[d]) * (-phys_forces[d]);
+                }
+                v_i + 0.5 * virial
+            })
+            .sum();
 
         // N_dof/(2beta) + bead-averaged [ V + virial_correction ]
         ndof as f64 / (2.0 * self.beta) + sum / p
@@ -455,30 +462,35 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
     }
 
     /// OBABO Langevin step for multi-atom system.
+    ///
+    /// All polymer replicas are stepped in parallel using Rayon.
+    /// Each polymer's O-step thermostat uses thread-local RNG.
     pub fn step_obabo(&mut self) {
         let dt = self.dt;
         let half_dt = dt / 2.0;
         let n_beads = self.nm_transform.n_beads;
         let ndof = self.ndof;
+        let nm_transform = &self.nm_transform;
+        let thermostat = &self.thermostat;
 
-        for polymer in &mut self.polymers {
+        self.polymers.par_iter_mut().for_each(|polymer| {
             // === O step: thermostat in normal mode space ===
             // Transform velocities to normal modes (per DOF)
             let mut mode_vel: Vec<Vec<f64>> = vec![vec![0.0; ndof]; n_beads];
             for d in 0..ndof {
                 let bead_v: Vec<f64> = polymer.velocities.iter().map(|v| v[d]).collect();
-                let modes = self.nm_transform.to_normal_modes(&bead_v);
+                let modes = nm_transform.to_normal_modes(&bead_v);
                 for k in 0..n_beads {
                     mode_vel[k][d] = modes[k];
                 }
             }
 
-            self.thermostat.apply_o_step(&mut mode_vel);
+            thermostat.apply_o_step(&mut mode_vel);
 
             // Transform back to bead space
             for d in 0..ndof {
                 let modes: Vec<f64> = mode_vel.iter().map(|m| m[d]).collect();
-                let bead_v = self.nm_transform.to_beads(&modes);
+                let bead_v = nm_transform.to_beads(&modes);
                 for i in 0..n_beads {
                     polymer.velocities[i][d] = bead_v[i];
                 }
@@ -512,50 +524,50 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
             let mut mode_vel: Vec<Vec<f64>> = vec![vec![0.0; ndof]; n_beads];
             for d in 0..ndof {
                 let bead_v: Vec<f64> = polymer.velocities.iter().map(|v| v[d]).collect();
-                let modes = self.nm_transform.to_normal_modes(&bead_v);
+                let modes = nm_transform.to_normal_modes(&bead_v);
                 for k in 0..n_beads {
                     mode_vel[k][d] = modes[k];
                 }
             }
 
-            self.thermostat.apply_o_step(&mut mode_vel);
+            thermostat.apply_o_step(&mut mode_vel);
 
             for d in 0..ndof {
                 let modes: Vec<f64> = mode_vel.iter().map(|m| m[d]).collect();
-                let bead_v = self.nm_transform.to_beads(&modes);
+                let bead_v = nm_transform.to_beads(&modes);
                 for i in 0..n_beads {
                     polymer.velocities[i][d] = bead_v[i];
                 }
             }
-        }
+        });
 
         self.step += 1;
     }
 
     /// Average virial energy across all polymers
     pub fn average_virial_energy(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.virial_energy_estimator())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average potential energy across all polymers
     pub fn average_potential_energy(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.potential_energy())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average transfer coordinate across all polymers
     pub fn average_transfer_coordinate(&self, donor: usize, proton: usize, acceptor: usize) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.transfer_coordinate(donor, proton, acceptor))
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average R_g for a specific atom across all polymers
     pub fn average_atom_rg(&self, atom: usize) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.atom_radius_of_gyration(atom))
             .sum::<f64>() / self.polymers.len() as f64
     }
@@ -588,21 +600,19 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
 
     /// Fraction of beads where the proton is closer to the acceptor (transfer coord > 0)
     pub fn tunneling_fraction(&self, donor: usize, proton: usize, acceptor: usize) -> f64 {
-        let mut tunneled = 0;
-        let mut total = 0;
-        for polymer in &self.polymers {
-            let tc = polymer.bead_transfer_coordinates(donor, proton, acceptor);
-            for &x in &tc {
-                if x > 0.0 { tunneled += 1; }
-                total += 1;
-            }
-        }
+        let (tunneled, total) = self.polymers.par_iter()
+            .map(|polymer| {
+                let tc = polymer.bead_transfer_coordinates(donor, proton, acceptor);
+                let t = tc.iter().filter(|&&x| x > 0.0).count();
+                (t, tc.len())
+            })
+            .reduce(|| (0, 0), |(t1, n1), (t2, n2)| (t1 + t2, n1 + n2));
         tunneled as f64 / total as f64
     }
 
     /// Average R_OO (donor-acceptor distance) across all polymers
     pub fn average_roo(&self, donor: usize, acceptor: usize) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.centroid_distance(donor, acceptor))
             .sum::<f64>() / self.polymers.len() as f64
     }
@@ -613,44 +623,43 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
     pub fn average_proton_rg_decomposed(
         &self, donor: usize, proton: usize, acceptor: usize,
     ) -> (f64, f64) {
-        let mut rg_par_sum = 0.0;
-        let mut rg_perp_sum = 0.0;
         let n = self.polymers.len() as f64;
 
-        for polymer in &self.polymers {
-            let cent = polymer.centroid();
-            // O-O axis direction
-            let mut axis = [0.0; 3];
-            let mut axis_len = 0.0;
-            for xyz in 0..3 {
-                let d = cent[3*acceptor+xyz] - cent[3*donor+xyz];
-                axis[xyz] = d;
-                axis_len += d * d;
-            }
-            axis_len = axis_len.sqrt().max(1e-15);
-            for xyz in 0..3 { axis[xyz] /= axis_len; }
-
-            // Centroid of the proton
-            let mut h_cent = [0.0; 3];
-            for xyz in 0..3 {
-                h_cent[xyz] = cent[3*proton+xyz];
-            }
-
-            let mut par2 = 0.0;
-            let mut perp2 = 0.0;
-            for bead in &polymer.positions {
-                let mut dh = [0.0; 3];
+        let (rg_par_sum, rg_perp_sum) = self.polymers.par_iter()
+            .map(|polymer| {
+                let cent = polymer.centroid();
+                // O-O axis direction
+                let mut axis = [0.0; 3];
+                let mut axis_len = 0.0;
                 for xyz in 0..3 {
-                    dh[xyz] = bead[3*proton+xyz] - h_cent[xyz];
+                    let d = cent[3*acceptor+xyz] - cent[3*donor+xyz];
+                    axis[xyz] = d;
+                    axis_len += d * d;
                 }
-                let proj = dh[0]*axis[0] + dh[1]*axis[1] + dh[2]*axis[2];
-                par2 += proj * proj;
-                perp2 += dh[0]*dh[0] + dh[1]*dh[1] + dh[2]*dh[2] - proj*proj;
-            }
-            let p = polymer.n_beads as f64;
-            rg_par_sum += (par2 / p).sqrt();
-            rg_perp_sum += (perp2.max(0.0) / p).sqrt();
-        }
+                axis_len = axis_len.sqrt().max(1e-15);
+                for xyz in 0..3 { axis[xyz] /= axis_len; }
+
+                // Centroid of the proton
+                let mut h_cent = [0.0; 3];
+                for xyz in 0..3 {
+                    h_cent[xyz] = cent[3*proton+xyz];
+                }
+
+                let mut par2 = 0.0;
+                let mut perp2 = 0.0;
+                for bead in &polymer.positions {
+                    let mut dh = [0.0; 3];
+                    for xyz in 0..3 {
+                        dh[xyz] = bead[3*proton+xyz] - h_cent[xyz];
+                    }
+                    let proj = dh[0]*axis[0] + dh[1]*axis[1] + dh[2]*axis[2];
+                    par2 += proj * proj;
+                    perp2 += dh[0]*dh[0] + dh[1]*dh[1] + dh[2]*dh[2] - proj*proj;
+                }
+                let p = polymer.n_beads as f64;
+                ((par2 / p).sqrt(), (perp2.max(0.0) / p).sqrt())
+            })
+            .reduce(|| (0.0, 0.0), |(a1, b1), (a2, b2)| (a1 + a2, b1 + b2));
 
         (rg_par_sum / n, rg_perp_sum / n)
     }

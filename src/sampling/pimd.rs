@@ -17,6 +17,7 @@
 //!   J. Chem. Phys. 133, 124104
 
 use rand_distr::{Distribution, Normal};
+use rayon::prelude::*;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -478,15 +479,19 @@ impl<P: Potential> PIMDSimulation<P> {
     ///   A: full-step position update (bead space)
     ///   B: half-step velocity update from forces (bead space)
     ///   O: half-step thermostat (in normal mode space)
+    ///
+    /// All polymer replicas are stepped in parallel using Rayon.
     pub fn step_obabo(&mut self) {
         let dt = self.dt;
         let half_dt = dt / 2.0;
+        let nm_transform = &self.nm_transform;
+        let thermostat = &self.thermostat;
 
-        for polymer in &mut self.polymers {
+        self.polymers.par_iter_mut().for_each(|polymer| {
             // === O step: thermostat in normal mode space ===
-            let mut mode_v = self.nm_transform.velocities_to_normal_modes(&polymer.velocities);
-            self.thermostat.apply_o_step(&mut mode_v);
-            polymer.velocities = self.nm_transform.velocities_to_beads(&mode_v);
+            let mut mode_v = nm_transform.velocities_to_normal_modes(&polymer.velocities);
+            thermostat.apply_o_step(&mut mode_v);
+            polymer.velocities = nm_transform.velocities_to_beads(&mode_v);
 
             // === B step: half-step velocity from forces ===
             for i in 0..polymer.n_beads {
@@ -507,45 +512,45 @@ impl<P: Potential> PIMDSimulation<P> {
             }
 
             // === O step: thermostat in normal mode space ===
-            let mut mode_v = self.nm_transform.velocities_to_normal_modes(&polymer.velocities);
-            self.thermostat.apply_o_step(&mut mode_v);
-            polymer.velocities = self.nm_transform.velocities_to_beads(&mode_v);
-        }
+            let mut mode_v = nm_transform.velocities_to_normal_modes(&polymer.velocities);
+            thermostat.apply_o_step(&mut mode_v);
+            polymer.velocities = nm_transform.velocities_to_beads(&mode_v);
+        });
 
         self.step += 1;
     }
 
     /// Average virial energy estimator across all polymers
     pub fn average_virial_energy(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.virial_energy_estimator())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average primitive energy estimator across all polymers
     pub fn average_primitive_energy(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.primitive_energy_estimator())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average centroid position across all polymers
     pub fn average_centroid(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.centroid())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average radius of gyration across all polymers
     pub fn average_radius_of_gyration(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.radius_of_gyration())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
     /// Average potential energy across all polymers
     pub fn average_potential_energy(&self) -> f64 {
-        self.polymers.iter()
+        self.polymers.par_iter()
             .map(|p| p.potential_energy())
             .sum::<f64>() / self.polymers.len() as f64
     }
@@ -606,13 +611,12 @@ impl<P: Potential> PIMDSimulation<P> {
     /// Compute the fraction of beads that have tunneled (crossed x=0)
     /// relative to starting in the right well. Averaged across polymers.
     pub fn tunneling_fraction(&self) -> f64 {
-        let mut total_left = 0;
-        let mut total_beads = 0;
-        for polymer in &self.polymers {
-            let (n_left, _) = polymer.bead_distribution();
-            total_left += n_left;
-            total_beads += polymer.n_beads;
-        }
+        let (total_left, total_beads) = self.polymers.par_iter()
+            .map(|polymer| {
+                let (n_left, _) = polymer.bead_distribution();
+                (n_left, polymer.n_beads)
+            })
+            .reduce(|| (0, 0), |(l1, b1), (l2, b2)| (l1 + l2, b1 + b2));
         total_left as f64 / total_beads as f64
     }
 }
