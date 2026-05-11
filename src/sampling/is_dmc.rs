@@ -157,6 +157,7 @@ impl ISDMCWalker {
     }
 
     /// Refresh all cached quantities from current positions.
+    #[allow(dead_code)]
     fn refresh<T: MultiWfn + EnergyCalculator>(&mut self, wfn: &T) {
         self.psi = wfn.evaluate(&self.positions);
         self.drift = Self::compute_drift(wfn, &self.positions, self.psi);

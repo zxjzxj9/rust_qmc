@@ -181,7 +181,8 @@ impl JastrowOptimizer {
     }
     
     /// Compute gradient of variance with respect to Jastrow parameters.
-    fn compute_gradient(&self, wfn: &MethaneGTO, current_variance: f64) -> (f64, f64) {
+    #[allow(dead_code)]
+    fn compute_gradient(&self, wfn: &MethaneGTO, _current_variance: f64) -> (f64, f64) {
         let params = wfn.get_jastrow_params();
         
         // Gradient w.r.t. b_ee

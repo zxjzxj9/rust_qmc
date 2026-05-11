@@ -5,7 +5,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use nalgebra::{Matrix3, Vector3};
 use rand::Rng;
-use rand_distr::{Distribution, Normal};
+use rand_distr::Normal;
 use crate::sampling::{Walker, BranchingResult, VmcWalker};
 use statrs::function::erf::erfc;
 
@@ -292,7 +292,7 @@ impl VmcWalker for LithiumCrystalWalker {
 
     fn move_walker(&mut self) -> (bool, f64) {
         // Save current positions
-        let old_positions = self.electron_positions.clone();
+        let _old_positions = self.electron_positions.clone();
         let old_energy = self.energy;
 
         // Attempt a move

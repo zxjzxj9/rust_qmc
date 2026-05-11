@@ -7,7 +7,8 @@ use nalgebra::Vector3;
 use rand::Rng;
 use crate::correlation::Jastrow2;
 use crate::sampling::EnergyCalculator;
-use crate::wavefunction::{MultiWfn, STOSlaterDet, STO, init_li_sto};
+use crate::wavefunction::{MultiWfn, STO, init_li_sto};
+
 use super::crystal::LatticeVector;
 
 /// Lithium FCC crystal wavefunction.
@@ -147,6 +148,7 @@ impl LithiumFCC {
     }
 
     /// Apply periodic boundary conditions to a position.
+    #[allow(dead_code)]
     fn wrap_position(&self, pos: &Vector3<f64>) -> Vector3<f64> {
         let a = self.lattice_constant;
         Vector3::new(

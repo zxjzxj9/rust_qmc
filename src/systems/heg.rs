@@ -61,6 +61,7 @@ pub struct HomogeneousElectronGas {
     /// Cubic simulation box length (Bohr)
     pub box_length: f64,
     /// Twist vector in reduced coordinates [-0.5, 0.5]³
+    #[allow(dead_code)]
     twist: Vector3<f64>,
     /// k-vectors for occupied orbitals (spin-up), including twist
     k_vectors_up: Vec<Vector3<f64>>,
@@ -231,6 +232,7 @@ impl HomogeneousElectronGas {
     }
 
     /// Generate k-vectors (legacy, no twist)
+    #[allow(dead_code)]
     fn generate_k_vectors(n: usize, box_length: f64) -> Vec<Vector3<f64>> {
         Self::generate_k_vectors_with_twist(n, box_length, &Vector3::zeros())
     }
@@ -525,7 +527,7 @@ impl HomogeneousElectronGas {
         let n = positions.len();
         let alpha = self.ewald_alpha;
         let l = self.box_length;
-        let volume = l.powi(3);
+        let _volume = l.powi(3);
         
         // === Part 1: Real-space sum ===
         // V_real = Σᵢ<ⱼ erfc(alpha|rᵢⱼ|) / |rᵢⱼ|
@@ -584,7 +586,7 @@ impl HomogeneousElectronGas {
         let n = positions.len();
         let alpha = self.ewald_alpha;
         let l = self.box_length;
-        let volume = l.powi(3);
+        let _volume = l.powi(3);
         
         let mut v_real = 0.0;
         for i in 0..n {
@@ -647,6 +649,7 @@ impl HomogeneousElectronGas {
     /// 
     /// The cross term 2(∇D/D)·(∇J/J) has an imaginary part that contributes
     /// to the kinetic energy when we take the real part!
+    #[allow(dead_code)]
     fn kinetic_energy(&self, positions: &[Vector3<f64>]) -> f64 {
         // === Part 1: Slater kinetic (configuration-independent) ===
         // T_slater = ½ Σₖ k² (sum over all occupied k-vectors)
@@ -756,6 +759,7 @@ impl HomogeneousElectronGas {
     /// For plane waves, ∇ₗₙD is purely imaginary (ik terms).
     /// The real part of the cross term vanishes on average, but we should
     /// still compute it for accuracy.
+    #[allow(dead_code)]
     fn kinetic_cross_term(&self, positions: &[Vector3<f64>], grad_j: &[Vector3<f64>]) -> f64 {
         // Split positions by spin
         let r_up: Vec<_> = positions[..self.num_up].to_vec();

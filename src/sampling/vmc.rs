@@ -269,6 +269,7 @@ impl DDWalkerState {
     }
 
     /// Refresh drift and psi from current positions.
+    #[allow(dead_code)]
     fn refresh<T: MultiWfn>(&mut self, wfn: &T) {
         self.psi = wfn.evaluate(&self.positions);
         self.drift = Self::compute_drift(wfn, &self.positions, self.psi);

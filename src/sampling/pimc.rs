@@ -719,6 +719,7 @@ impl<P: Potential> GeneralPath<P> {
     }
     
     #[inline]
+    #[allow(dead_code)]
     fn kinetic_action(&self, i: usize) -> f64 {
         let j = (i + 1) % self.n_beads;
         let dx = self.beads[j] - self.beads[i];
@@ -726,6 +727,7 @@ impl<P: Potential> GeneralPath<P> {
     }
     
     #[inline]
+    #[allow(dead_code)]
     fn potential_action(&self, i: usize) -> f64 {
         self.dtau * self.potential.evaluate(self.beads[i])
     }

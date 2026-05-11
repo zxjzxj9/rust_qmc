@@ -451,12 +451,14 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
 
     /// Normal mode transform for a single DOF across all beads.
     /// Extracts bead values for DOF d, transforms, and returns mode values.
+    #[allow(dead_code)]
     fn to_modes_1d(&self, bead_values: &[Vec<f64>], dof: usize) -> Vec<f64> {
         let vals: Vec<f64> = bead_values.iter().map(|b| b[dof]).collect();
         self.nm_transform.to_normal_modes(&vals)
     }
 
     /// Inverse: mode values for DOF d -> bead values
+    #[allow(dead_code)]
     fn to_beads_1d(&self, mode_values: &[f64]) -> Vec<f64> {
         self.nm_transform.to_beads(mode_values)
     }
@@ -1625,7 +1627,7 @@ impl ZundelPES {
     /// H12 = A*exp(-mu(R_OO - R0)), only depends on R_OO
     fn coupling_grad(&self, coords: &[f64], grad: &mut [f64]) {
         for g in grad.iter_mut() { *g = 0.0; }
-        let r_oo = Self::dist(coords, 0, 4);
+        let _r_oo = Self::dist(coords, 0, 4);
         let h12 = self.coupling(coords);
         let dh12_dr = -self.coupling_mu * h12;
         Self::dist_grad(coords, 0, 4, grad, dh12_dr);

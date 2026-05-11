@@ -10,7 +10,7 @@ use nalgebra::Vector3;
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use crate::wavefunction::MultiWfn;
-use super::traits::{EnergyCalculator, ForceCalculator};
+use super::traits::ForceCalculator;
 use super::force_variance::ForceEstimator;
 
 /// Configuration for the geometry optimizer.
