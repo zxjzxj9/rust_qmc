@@ -9,6 +9,7 @@ mod pimc_fermion;
 mod pimd;
 mod pimd_molecular;
 mod umbrella;
+mod dftb;
 mod optimize;
 mod sr_optimize;
 pub mod geometry_opt;
@@ -44,6 +45,7 @@ pub use umbrella::{
     UmbrellaBias, BiasedMolecularPotential, UmbrellaWindow, WHAMSolver,
     run_pimd_umbrella_sampling, run_zundel_umbrella_sampling,
 };
+pub use dftb::ToyDFTB;
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
 pub use force_variance::ForceEstimator;
 
