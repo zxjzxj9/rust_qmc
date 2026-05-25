@@ -8,6 +8,7 @@ mod pimc;
 mod pimc_fermion;
 mod pimd;
 mod pimd_molecular;
+mod pimd_rpc;
 mod umbrella;
 mod dftb;
 mod optimize;
@@ -40,6 +41,12 @@ pub use pimd_molecular::{
     MolecularPotential, MolecularRingPolymer, MolecularPILE, MolecularPIMD,
     BifluoridePES, run_pimd_bifluoride,
     ZundelPES, run_pimd_zundel, free_energy_profile,
+};
+pub use pimd_rpc::{
+    RPContraction, SplittablePotential, SplittableMolecularPotential,
+    RPCRingPolymer, RPCSimulation,
+    RPCMolecularRingPolymer, RPCMolecularPIMD,
+    SplittableDoubleWell,
 };
 pub use umbrella::{
     UmbrellaBias, BiasedMolecularPotential, UmbrellaWindow, WHAMSolver,

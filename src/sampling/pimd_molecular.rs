@@ -80,6 +80,10 @@ pub trait MolecularPotential: Clone + Send + Sync {
 ///
 /// Each bead stores a full molecular geometry (ndof = 3 x N_atoms coordinates).
 /// Spring constants are per-atom: κ_a = m_a / dτ² for atom a.
+///
+/// Optionally supports Takahashi-Imada fourth-order factorization:
+///   V_TI(R) = V(R) + (dτ²/24) Σ_a |F_a(R)|²/m_a
+/// which achieves O(1/P⁴) convergence.
 pub struct MolecularRingPolymer<P: MolecularPotential> {
     /// Bead positions: positions[bead][dof], each bead has ndof entries
     pub positions: Vec<Vec<f64>>,
@@ -107,6 +111,8 @@ pub struct MolecularRingPolymer<P: MolecularPotential> {
     pub dtau: f64,
     /// The molecular potential
     pub potential: P,
+    /// Whether to use Takahashi-Imada fourth-order correction
+    pub use_ti: bool,
 }
 
 impl<P: MolecularPotential> MolecularRingPolymer<P> {
@@ -174,6 +180,7 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
             beta,
             dtau,
             potential,
+            use_ti: false,
         };
         rp.compute_forces();
         rp
@@ -183,6 +190,7 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
     ///
     /// Phase 1: physical forces computed in parallel across beads (independent)
     /// Phase 2: spring forces added sequentially (depends on neighbors)
+    /// Phase 3: (if use_ti) TI correction added via numerical force gradient
     pub fn compute_forces(&mut self) {
         let ndof = self.ndof;
         let potential = &self.potential;
@@ -193,6 +201,48 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
             .for_each(|(f, pos)| {
                 potential.forces(pos, f);
             });
+
+        // Phase 1b: if TI, add the force gradient correction
+        // F_TI_d = F_d - (dτ²/12m_d) Σ_d' F_d'·(∂F_d'/∂R_d) / m_d'
+        // Simplified: use numerical gradient of |F|²/2m contribution
+        if self.use_ti {
+            let dtau2 = self.dtau * self.dtau;
+            let h = 1e-6;
+            let mass_dof = &self.mass_dof;
+
+            // For each bead, compute the TI force correction numerically:
+            // -∇_d [(dτ²/24) Σ_d' |F_d'|²/m_d']
+            // = -(dτ²/24) * d/dR_d [Σ_d' F_d'² / m_d']
+            // via central difference
+            for i in 0..self.n_beads {
+                let mut pos_plus = self.positions[i].clone();
+                let mut pos_minus = self.positions[i].clone();
+                let mut f_plus = vec![0.0; ndof];
+                let mut f_minus = vec![0.0; ndof];
+
+                for d in 0..ndof {
+                    pos_plus[d] = self.positions[i][d] + h;
+                    pos_minus[d] = self.positions[i][d] - h;
+
+                    potential.forces(&pos_plus, &mut f_plus);
+                    potential.forces(&pos_minus, &mut f_minus);
+
+                    // Σ_d' |F_d'|²/m_d' at pos+h and pos-h
+                    let sum_plus: f64 = f_plus.iter().enumerate()
+                        .map(|(dp, &fp)| fp * fp / mass_dof[dp])
+                        .sum();
+                    let sum_minus: f64 = f_minus.iter().enumerate()
+                        .map(|(dp, &fm)| fm * fm / mass_dof[dp])
+                        .sum();
+
+                    let d_sum_dr = (sum_plus - sum_minus) / (2.0 * h);
+                    self.forces[i][d] -= (dtau2 / 24.0) * d_sum_dr;
+
+                    pos_plus[d] = self.positions[i][d];
+                    pos_minus[d] = self.positions[i][d];
+                }
+            }
+        }
 
         // Phase 2: add spring forces (depends on neighboring bead positions)
         for i in 0..self.n_beads {
@@ -257,6 +307,41 @@ impl<P: MolecularPotential> MolecularRingPolymer<P> {
 
         // N_dof/(2beta) + bead-averaged [ V + virial_correction ]
         ndof as f64 / (2.0 * self.beta) + sum / p
+    }
+
+    /// Takahashi-Imada virial energy estimator for multi-atom systems.
+    ///
+    /// Adds the TI correction to the standard virial estimator:
+    ///   E_TI = E_vir + (1/P) Σ_i (dτ²/12) Σ_a |F_a(R_i)|²/m_a
+    ///
+    /// Reference: Yamamoto, JCP 123, 104101 (2005)
+    pub fn ti_virial_energy_estimator(&self) -> f64 {
+        let base = self.virial_energy_estimator();
+        let dtau2 = self.dtau * self.dtau;
+        let ndof = self.ndof;
+
+        let ti_correction: f64 = self.positions.par_iter()
+            .map(|pos| {
+                let mut phys_forces = vec![0.0; ndof];
+                self.potential.forces(pos, &mut phys_forces);
+                let mut sum_f2_m: f64 = 0.0;
+                for d in 0..ndof {
+                    sum_f2_m += phys_forces[d] * phys_forces[d] / self.mass_dof[d];
+                }
+                (dtau2 / 12.0) * sum_f2_m
+            })
+            .sum::<f64>() / self.n_beads as f64;
+
+        base + ti_correction
+    }
+
+    /// Get the appropriate energy estimator based on whether TI is enabled.
+    pub fn energy_estimator(&self) -> f64 {
+        if self.use_ti {
+            self.ti_virial_energy_estimator()
+        } else {
+            self.virial_energy_estimator()
+        }
     }
 
     /// Radius of gyration for a specific atom a:
@@ -447,6 +532,27 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
             step: 0,
             ndof,
         }
+    }
+
+    /// Create a new multi-atom PIMD simulation with Takahashi-Imada correction.
+    ///
+    /// Same as `new()` but enables TI fourth-order correction on all ring polymers.
+    ///
+    /// Reference: Takahashi & Imada, J. Phys. Soc. Jpn. 53, 3765 (1984)
+    pub fn new_with_ti(
+        n_polymers: usize,
+        n_beads: usize,
+        beta: f64,
+        dt: f64,
+        gamma_centroid: f64,
+        potential: P,
+    ) -> Self {
+        let mut sim = Self::new(n_polymers, n_beads, beta, dt, gamma_centroid, potential);
+        for polymer in &mut sim.polymers {
+            polymer.use_ti = true;
+            polymer.compute_forces();
+        }
+        sim
     }
 
     /// Normal mode transform for a single DOF across all beads.

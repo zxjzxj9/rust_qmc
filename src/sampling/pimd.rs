@@ -132,6 +132,163 @@ impl NormalModeTransform {
     pub fn velocities_to_beads(&self, mode_velocities: &[f64]) -> Vec<f64> {
         self.to_beads(mode_velocities)
     }
+
+    // =========================================================================
+    // FFT-based transforms for O(P log P) complexity
+    // =========================================================================
+
+    /// FFT-based normal mode transform. O(P log P) for power-of-2 bead counts.
+    ///
+    /// Uses Cooley-Tukey radix-2 DIT FFT to compute the real DFT,
+    /// then maps complex FFT output to the real normal mode convention.
+    pub fn to_normal_modes_fft(&self, beads: &[f64]) -> Vec<f64> {
+        let p = self.n_beads;
+        assert!(p.is_power_of_two(), "FFT requires power-of-2 bead count");
+
+        // Compute FFT of real input
+        let mut re = beads.to_vec();
+        let mut im = vec![0.0; p];
+        fft_radix2(&mut re, &mut im, false);
+
+        // Map complex FFT output to real normal mode convention
+        let pf = p as f64;
+        let mut modes = vec![0.0; p];
+
+        // k=0: centroid
+        modes[0] = re[0] / pf.sqrt();
+
+        // cos modes: k = 1..P/2-1
+        for k in 1..p / 2 {
+            modes[k] = re[k] * (2.0 / pf).sqrt();
+        }
+
+        // k = P/2 (Nyquist)
+        if p % 2 == 0 {
+            modes[p / 2] = re[p / 2] / pf.sqrt();
+        }
+
+        // sin modes: k > P/2 (mapped from imaginary part)
+        for k in (p / 2 + 1)..p {
+            let fft_k = p - k; // sin modes map to negative frequencies
+            modes[k] = -im[fft_k] * (2.0 / pf).sqrt();
+        }
+
+        modes
+    }
+
+    /// Inverse FFT-based transform: normal modes back to beads. O(P log P).
+    pub fn to_beads_fft(&self, modes: &[f64]) -> Vec<f64> {
+        let p = self.n_beads;
+        assert!(p.is_power_of_two(), "FFT requires power-of-2 bead count");
+
+        let pf = p as f64;
+
+        // Build complex FFT input from real normal mode coefficients
+        let mut re = vec![0.0; p];
+        let mut im = vec![0.0; p];
+
+        // k=0
+        re[0] = modes[0] * pf.sqrt();
+
+        // cos modes
+        for k in 1..p / 2 {
+            re[k] = modes[k] / (2.0 / pf).sqrt();
+            re[p - k] = re[k]; // Hermitian symmetry for real signal
+        }
+
+        // k = P/2
+        if p % 2 == 0 {
+            re[p / 2] = modes[p / 2] * pf.sqrt();
+        }
+
+        // sin modes (stored as imaginary parts)
+        for k in (p / 2 + 1)..p {
+            let fft_k = p - k;
+            let sin_coeff = modes[k] / (2.0 / pf).sqrt();
+            im[fft_k] = -sin_coeff;
+            im[p - fft_k] = sin_coeff; // Hermitian symmetry
+        }
+
+        // Inverse FFT = (1/P) * conj(FFT(conj(x)))
+        // For real data: IFFT = (1/P) * FFT with sign flip on im
+        for v in im.iter_mut() { *v = -*v; }
+        fft_radix2(&mut re, &mut im, false);
+        for v in im.iter_mut() { *v = -*v; }
+
+        // Scale by 1/P for inverse
+        for v in re.iter_mut() { *v /= pf; }
+
+        re
+    }
+
+    /// Auto-select the best transform method based on bead count.
+    /// Uses FFT for power-of-2 counts ≥ 16, DFT otherwise.
+    pub fn to_normal_modes_auto(&self, beads: &[f64]) -> Vec<f64> {
+        if self.n_beads.is_power_of_two() && self.n_beads >= 16 {
+            self.to_normal_modes_fft(beads)
+        } else {
+            self.to_normal_modes(beads)
+        }
+    }
+
+    /// Auto-select the best inverse transform method.
+    pub fn to_beads_auto(&self, modes: &[f64]) -> Vec<f64> {
+        if self.n_beads.is_power_of_two() && self.n_beads >= 16 {
+            self.to_beads_fft(modes)
+        } else {
+            self.to_beads(modes)
+        }
+    }
+}
+
+/// In-place Cooley-Tukey radix-2 DIT FFT.
+///
+/// Operates on separate real and imaginary arrays.
+/// `inverse` flag is unused here (caller handles conjugation for IFFT).
+fn fft_radix2(re: &mut [f64], im: &mut [f64], _inverse: bool) {
+    let n = re.len();
+    assert!(n.is_power_of_two());
+    assert_eq!(re.len(), im.len());
+
+    // Bit-reversal permutation
+    let mut j = 0usize;
+    for i in 0..n {
+        if i < j {
+            re.swap(i, j);
+            im.swap(i, j);
+        }
+        let mut m = n >> 1;
+        while m >= 1 && j >= m {
+            j -= m;
+            m >>= 1;
+        }
+        j += m;
+    }
+
+    // Butterfly stages
+    let mut len = 2;
+    while len <= n {
+        let half = len / 2;
+        let angle_step = -2.0 * PI / len as f64;
+        for start in (0..n).step_by(len) {
+            for k in 0..half {
+                let angle = angle_step * k as f64;
+                let wr = angle.cos();
+                let wi = angle.sin();
+
+                let u_re = re[start + k];
+                let u_im = im[start + k];
+                let v_re = re[start + k + half] * wr - im[start + k + half] * wi;
+                let v_im = re[start + k + half] * wi + im[start + k + half] * wr;
+
+                re[start + k] = u_re + v_re;
+                im[start + k] = u_im + v_im;
+                re[start + k + half] = u_re - v_re;
+                im[start + k + half] = u_im - v_im;
+            }
+        }
+        len <<= 1;
+    }
 }
 
 // =============================================================================
@@ -238,6 +395,12 @@ impl PILEThermostat {
 /// The ring polymer Hamiltonian is:
 ///   H_RP = Σᵢ [0.5m v_i² + 0.5mw_P²(x_{i+1}-x_i)² + V(x_i)]
 /// where w_P = P/(betahbar) = 1/(dτ) is the intra-bead spring frequency.
+///
+/// Optionally supports Takahashi-Imada fourth-order factorization:
+///   V_TI(x) = V(x) + (dτ²/24m)|F(x)|²
+/// which achieves O(1/P⁴) convergence instead of O(1/P²).
+///
+/// Reference (TI): Takahashi & Imada, J. Phys. Soc. Jpn. 53, 3765 (1984)
 #[derive(Clone)]
 pub struct RingPolymer<P: Potential> {
     /// Bead positions x_i, i = 0..P-1
@@ -259,6 +422,8 @@ pub struct RingPolymer<P: Potential> {
     pub spring_constant: f64,
     /// External potential
     pub potential: P,
+    /// Whether to use Takahashi-Imada fourth-order correction
+    pub use_ti: bool,
 }
 
 impl<P: Potential> RingPolymer<P> {
@@ -298,13 +463,26 @@ impl<P: Potential> RingPolymer<P> {
             dtau,
             spring_constant,
             potential,
+            use_ti: false,
         };
         rp.compute_forces();
         rp
     }
 
     /// Compute total forces on each bead: F_i = F_spring(i) + F_phys(i)
+    ///
+    /// When `use_ti` is enabled, the physical force includes the
+    /// Takahashi-Imada gradient correction:
+    ///   F_TI(x) = F(x) - d/dx [(dτ²/24m)|F(x)|²]
+    ///           = F(x) - (dτ²/12m) F(x) · F'(x)
+    /// where F'(x) = dF/dx (computed numerically).
     pub fn compute_forces(&mut self) {
+        let ti_prefactor = if self.use_ti {
+            self.dtau * self.dtau / (12.0 * self.mass)
+        } else {
+            0.0
+        };
+
         for i in 0..self.n_beads {
             let prev = if i == 0 { self.n_beads - 1 } else { i - 1 };
             let next = (i + 1) % self.n_beads;
@@ -316,7 +494,19 @@ impl<P: Potential> RingPolymer<P> {
             // Physical force from potential
             let f_phys = self.potential.force(self.positions[i]);
 
-            self.forces[i] = f_spring + f_phys;
+            if self.use_ti {
+                // TI correction: -d/dx [(dτ²/24m)|F(x)|²]
+                // = -(dτ²/12m) · F(x) · dF/dx
+                // Compute dF/dx numerically
+                let h = 1e-6;
+                let f_plus = self.potential.force(self.positions[i] + h);
+                let f_minus = self.potential.force(self.positions[i] - h);
+                let df_dx = (f_plus - f_minus) / (2.0 * h);
+                let f_ti_correction = -ti_prefactor * f_phys * df_dx;
+                self.forces[i] = f_spring + f_phys + f_ti_correction;
+            } else {
+                self.forces[i] = f_spring + f_phys;
+            }
         }
     }
 
@@ -398,6 +588,38 @@ impl<P: Potential> RingPolymer<P> {
         1.0 / (2.0 * self.beta) + self.potential_energy() + 0.5 * virial_sum / self.n_beads as f64
     }
 
+    /// Takahashi-Imada virial energy estimator.
+    ///
+    /// Adds the TI potential correction to the standard virial estimator:
+    ///   E_TI = E_vir + (1/P) Σᵢ (dτ²/12m)|F(xᵢ)|²
+    ///
+    /// The factor of 1/12 (not 1/24) comes from the thermodynamic derivative
+    /// of the TI action with respect to beta.
+    ///
+    /// Reference: Yamamoto, JCP 123, 104101 (2005)
+    pub fn ti_virial_energy_estimator(&self) -> f64 {
+        let base = self.virial_energy_estimator();
+        let ti_factor = self.dtau * self.dtau / (12.0 * self.mass);
+
+        let ti_correction: f64 = self.positions.iter()
+            .map(|&x| {
+                let f = self.potential.force(x);
+                ti_factor * f * f
+            })
+            .sum::<f64>() / self.n_beads as f64;
+
+        base + ti_correction
+    }
+
+    /// Get the appropriate energy estimator based on whether TI is enabled.
+    pub fn energy_estimator(&self) -> f64 {
+        if self.use_ti {
+            self.ti_virial_energy_estimator()
+        } else {
+            self.virial_energy_estimator()
+        }
+    }
+
     /// Get the spread of bead positions (max - min) to gauge tunneling
     pub fn bead_spread(&self) -> f64 {
         let min = self.positions.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -473,6 +695,29 @@ impl<P: Potential> PIMDSimulation<P> {
         }
     }
 
+    /// Create a new PIMD simulation with Takahashi-Imada fourth-order correction.
+    ///
+    /// Same as `new()` but enables the TI correction on all ring polymers,
+    /// achieving O(1/P⁴) convergence instead of O(1/P²).
+    ///
+    /// Reference: Takahashi & Imada, J. Phys. Soc. Jpn. 53, 3765 (1984)
+    pub fn new_with_ti(
+        n_polymers: usize,
+        n_beads: usize,
+        beta: f64,
+        mass: f64,
+        dt: f64,
+        gamma_centroid: f64,
+        potential: P,
+    ) -> Self {
+        let mut sim = Self::new(n_polymers, n_beads, beta, mass, dt, gamma_centroid, potential);
+        for polymer in &mut sim.polymers {
+            polymer.use_ti = true;
+            polymer.compute_forces(); // Recompute with TI correction
+        }
+        sim
+    }
+
     /// Perform one PIMD time step using OBABO Langevin splitting:
     ///   O: half-step thermostat (in normal mode space)
     ///   B: half-step velocity update from forces (bead space)
@@ -524,6 +769,21 @@ impl<P: Potential> PIMDSimulation<P> {
     pub fn average_virial_energy(&self) -> f64 {
         self.polymers.par_iter()
             .map(|p| p.virial_energy_estimator())
+            .sum::<f64>() / self.polymers.len() as f64
+    }
+
+    /// Average TI virial energy estimator across all polymers
+    pub fn average_ti_virial_energy(&self) -> f64 {
+        self.polymers.par_iter()
+            .map(|p| p.ti_virial_energy_estimator())
+            .sum::<f64>() / self.polymers.len() as f64
+    }
+
+    /// Average energy using the appropriate estimator (TI or standard virial).
+    /// Automatically selects based on whether TI is enabled on the polymers.
+    pub fn average_energy_estimator(&self) -> f64 {
+        self.polymers.par_iter()
+            .map(|p| p.energy_estimator())
             .sum::<f64>() / self.polymers.len() as f64
     }
 
@@ -1016,5 +1276,125 @@ mod tests {
         let expected_rg = (beta / (12.0 * mass)).sqrt();
         // Allow generous tolerance since we use near-free, not exactly free
         assert_relative_eq!(mean_rg, expected_rg, epsilon = 0.3);
+    }
+
+    // ===== FFT Normal Mode Transform Tests =====
+
+    #[test]
+    fn test_fft_roundtrip() {
+        // FFT transform roundtrip: to_beads_fft(to_normal_modes_fft(x)) ~ x
+        let nmt = NormalModeTransform::new(16, 10.0);
+        let beads = vec![1.0, 0.5, -0.3, 0.8, -1.0, 0.2, 0.7, -0.5,
+                         0.3, -0.7, 1.2, -0.1, 0.9, -0.4, 0.6, -0.8];
+        let modes = nmt.to_normal_modes_fft(&beads);
+        let reconstructed = nmt.to_beads_fft(&modes);
+        for (&orig, &rec) in beads.iter().zip(reconstructed.iter()) {
+            assert_relative_eq!(orig, rec, epsilon = 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_fft_matches_dft() {
+        // FFT and DFT should give identical results
+        let nmt = NormalModeTransform::new(32, 10.0);
+        let beads: Vec<f64> = (0..32).map(|i| (i as f64 * 0.3).sin()).collect();
+
+        let modes_dft = nmt.to_normal_modes(&beads);
+        let modes_fft = nmt.to_normal_modes_fft(&beads);
+
+        for k in 0..32 {
+            assert_relative_eq!(modes_dft[k], modes_fft[k], epsilon = 1e-10,);
+        }
+    }
+
+    #[test]
+    fn test_fft_inverse_matches_dft() {
+        let nmt = NormalModeTransform::new(16, 10.0);
+        let modes: Vec<f64> = (0..16).map(|i| (i as f64 * 0.5).cos()).collect();
+
+        let beads_dft = nmt.to_beads(&modes);
+        let beads_fft = nmt.to_beads_fft(&modes);
+
+        for i in 0..16 {
+            assert_relative_eq!(beads_dft[i], beads_fft[i], epsilon = 1e-10);
+        }
+    }
+
+    // ===== Takahashi-Imada Tests =====
+
+    #[test]
+    fn test_ti_harmonic_oscillator() {
+        // TI should give exact result for harmonic oscillator even with fewer beads
+        // E0 = 0.5 for ω=1, m=1
+        let pot = HarmonicPotential { mass: 1.0, omega: 1.0 };
+        let n_beads = 16; // Fewer beads than standard test (32)
+        let beta = 20.0;
+        let mass = 1.0;
+        let dt = 0.1;
+        let gamma = 1.0;
+
+        let mut sim = PIMDSimulation::new_with_ti(20, n_beads, beta, mass, dt, gamma, pot);
+
+        // Equilibrate
+        for _ in 0..3000 {
+            sim.step_obabo();
+        }
+
+        // Sample
+        let mut energies = Vec::new();
+        for _ in 0..3000 {
+            sim.step_obabo();
+            energies.push(sim.average_ti_virial_energy());
+        }
+
+        let mean_e = energies.iter().sum::<f64>() / energies.len() as f64;
+        // TI should converge faster, allow tighter tolerance
+        assert_relative_eq!(mean_e, 0.5, epsilon = 0.15);
+    }
+
+    #[test]
+    fn test_ti_force_correction() {
+        // For harmonic potential V = 0.5*ω²*x², F = -ω²*x
+        // TI correction: -(dτ²/12m) F dF/dx = -(dτ²/12m)(-ω²x)(-ω²) = -(dτ²ω⁴x/12m)
+        // Total TI force: -ω²x - dτ²ω⁴x/(12m)
+        let pot = HarmonicPotential { mass: 1.0, omega: 1.0 };
+        let beta = 10.0;
+        let n_beads = 8;
+        let dtau = beta / n_beads as f64;
+        let mass = 1.0;
+
+        let mut rp = RingPolymer::new(n_beads, beta, mass, pot);
+        rp.use_ti = true;
+
+        // Set a known position
+        let x_test = 0.5;
+        rp.positions = vec![x_test; n_beads];
+        rp.compute_forces();
+
+        let omega = 1.0;
+        let f_phys = -omega * omega * x_test;
+        let df_dx = -omega * omega;
+        let ti_correction = -(dtau * dtau / (12.0 * mass)) * f_phys * df_dx;
+
+        // Spring forces cancel when all beads are at the same position
+        let expected_total = f_phys + ti_correction;
+        assert_relative_eq!(rp.forces[0], expected_total, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn test_ti_backward_compatible() {
+        // With use_ti=false, results should match standard PIMD
+        let pot = HarmonicPotential { mass: 1.0, omega: 1.0 };
+        let rp_standard = RingPolymer::new(8, 10.0, 1.0, pot.clone());
+
+        let mut rp_ti = RingPolymer::new(8, 10.0, 1.0, pot);
+        rp_ti.positions = rp_standard.positions.clone();
+        rp_ti.use_ti = false;
+        rp_ti.compute_forces();
+
+        // Forces should be identical when TI is disabled
+        for (f1, f2) in rp_standard.forces.iter().zip(rp_ti.forces.iter()) {
+            assert_relative_eq!(f1, f2, epsilon = 1e-12);
+        }
     }
 }
