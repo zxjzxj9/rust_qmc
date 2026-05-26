@@ -9,6 +9,7 @@ mod pimc_fermion;
 mod pimd;
 mod pimd_molecular;
 mod pimd_rpc;
+mod piglet;
 mod umbrella;
 mod dftb;
 mod optimize;
@@ -44,9 +45,11 @@ pub use pimd_molecular::{
 };
 pub use pimd_rpc::{
     RPContraction, SplittablePotential, SplittableMolecularPotential,
-    RPCRingPolymer, RPCSimulation,
-    RPCMolecularRingPolymer, RPCMolecularPIMD,
-    SplittableDoubleWell,
+    SplittableDoubleWell, RPCRingPolymer, RPCSimulation,
+};
+pub use piglet::{
+    PIQTBThermostat, MolecularPIQTB, PIGLETThermostat,
+    matrix_exponential, cholesky_decompose, load_piglet_matrices,
 };
 pub use umbrella::{
     UmbrellaBias, BiasedMolecularPotential, UmbrellaWindow, WHAMSolver,
