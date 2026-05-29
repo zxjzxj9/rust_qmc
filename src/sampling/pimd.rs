@@ -151,6 +151,9 @@ impl NormalModeTransform {
         fft_radix2(&mut re, &mut im, false);
 
         // Map complex FFT output to real normal mode convention
+        // FFT: X[k] = Σ x[i] exp(-j2πki/P) = Σ x[i][cos(2πki/P) - j·sin(2πki/P)]
+        // So: Re[k] = Σ x[i] cos(2πki/P), Im[k] = -Σ x[i] sin(2πki/P)
+        // DFT modes use cos(2πki/P) for k≤P/2, sin(2πki/P) for k>P/2
         let pf = p as f64;
         let mut modes = vec![0.0; p];
 
@@ -167,10 +170,10 @@ impl NormalModeTransform {
             modes[p / 2] = re[p / 2] / pf.sqrt();
         }
 
-        // sin modes: k > P/2 (mapped from imaginary part)
+        // sin modes: k > P/2
+        // DFT sin coeff = Σ x[i] sin(2πki/P) = -Im[k]
         for k in (p / 2 + 1)..p {
-            let fft_k = p - k; // sin modes map to negative frequencies
-            modes[k] = -im[fft_k] * (2.0 / pf).sqrt();
+            modes[k] = -im[k] * (2.0 / pf).sqrt();
         }
 
         modes
