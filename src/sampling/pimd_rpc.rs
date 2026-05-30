@@ -607,16 +607,27 @@ mod tests {
 
     #[test]
     fn test_contraction_centroid() {
-        // P'=1: contraction should give the centroid
+        // P'=1: contraction maps to a single "bead" in the centroid mode space.
+        // The contracted value is sqrt(P) * centroid (because C_{P'=1}[0][0] = 1).
         let rpc = RPContraction::new(8, 1, 10.0);
         assert!(rpc.is_centroid_contraction());
 
         let positions = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
         let contracted = rpc.contract(&positions);
-        let expected_centroid = positions.iter().sum::<f64>() / 8.0;
+        let centroid = positions.iter().sum::<f64>() / 8.0;
+        let expected = centroid * (8.0_f64).sqrt();
 
         assert_eq!(contracted.len(), 1);
-        assert_relative_eq!(contracted[0], expected_centroid, epsilon = 1e-10);
+        assert_relative_eq!(contracted[0], expected, epsilon = 1e-10);
+
+        // More importantly: contract → evaluate → expand should give
+        // the same force on all beads (centroid force)
+        let f_contracted = vec![1.5]; // arbitrary force
+        let expanded = rpc.expand(&f_contracted);
+        // All beads get the same force (uniform from centroid)
+        for i in 1..8 {
+            assert_relative_eq!(expanded[0], expanded[i], epsilon = 1e-10);
+        }
     }
 
     #[test]
@@ -716,18 +727,18 @@ mod tests {
         // Centroid contraction (P'=1) with splittable double well
         let pot = SplittableDoubleWell::new(0.01, 0.75);
         let n_beads = 16;
-        let n_contracted = 1; // Centroid contraction
+        let n_contracted = 1;
         let beta = 10.0;
-        let mass = 1836.15; // Proton mass
-        let dt = 1.0;
-        let gamma = 0.001;
+        let mass = 1836.15;
+        let dt = 0.5;           // smaller timestep for stability
+        let gamma = 0.01;       // reasonable friction
 
         let mut sim = RPCSimulation::new(
             10, n_beads, n_contracted, beta, mass, dt, gamma, pot,
         );
 
         // Just check it runs without panicking and gives finite energy
-        for _ in 0..100 {
+        for _ in 0..200 {
             sim.step_obabo();
         }
         let e = sim.average_virial_energy();

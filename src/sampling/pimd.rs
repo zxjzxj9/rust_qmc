@@ -186,37 +186,41 @@ impl NormalModeTransform {
 
         let pf = p as f64;
 
-        // Build complex FFT input from real normal mode coefficients
+        // Reconstruct complex FFT coefficients from real normal mode coefficients
+        // Forward: modes[k] = -Im[k] * sqrt(2/P)  for k > P/2
+        //   => Im[k] = -modes[k] / sqrt(2/P) = -sin_coeff
+        // And Hermitian symmetry: X[P-k] = conj(X[k])
         let mut re = vec![0.0; p];
         let mut im = vec![0.0; p];
 
-        // k=0
+        // k=0: centroid
         re[0] = modes[0] * pf.sqrt();
 
-        // cos modes
+        // cos modes: k = 1..P/2-1
         for k in 1..p / 2 {
             re[k] = modes[k] / (2.0 / pf).sqrt();
-            re[p - k] = re[k]; // Hermitian symmetry for real signal
         }
 
-        // k = P/2
+        // k = P/2 (Nyquist)
         if p % 2 == 0 {
             re[p / 2] = modes[p / 2] * pf.sqrt();
         }
 
-        // sin modes (stored as imaginary parts)
+        // sin modes k > P/2: Im[k] = -modes[k] / sqrt(2/P)
         for k in (p / 2 + 1)..p {
-            let fft_k = p - k;
             let sin_coeff = modes[k] / (2.0 / pf).sqrt();
-            im[fft_k] = -sin_coeff;
-            im[p - fft_k] = sin_coeff; // Hermitian symmetry
+            im[k] = -sin_coeff;
         }
 
-        // Inverse FFT = (1/P) * conj(FFT(conj(x)))
-        // For real data: IFFT = (1/P) * FFT with sign flip on im
+        // Apply Hermitian symmetry: X[P-k] = conj(X[k]) for k = 1..P/2-1
+        for k in 1..p / 2 {
+            re[p - k] = re[k];
+            im[p - k] = -im[k];
+        }
+
+        // Inverse FFT via conjugate: IFFT(X) = (1/P) conj(FFT(conj(X)))
         for v in im.iter_mut() { *v = -*v; }
         fft_radix2(&mut re, &mut im, false);
-        for v in im.iter_mut() { *v = -*v; }
 
         // Scale by 1/P for inverse
         for v in re.iter_mut() { *v /= pf; }

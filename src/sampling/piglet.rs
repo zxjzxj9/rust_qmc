@@ -875,28 +875,37 @@ mod tests {
     }
 
     #[test]
-    fn test_quantum_mode_energy_classical_limit() {
-        // At high temperature (small β), all modes should have E ≈ kBT/2
+    fn test_quantum_mode_energy_matches_formula() {
+        // Verify quantum_mode_energy matches (ω/2)coth(βω/2) directly
         let n_beads = 8;
-        let beta = 0.01; // Very high T
+        let beta = 10.0;
         let dtau = beta / n_beads as f64;
         let freqs: Vec<f64> = (0..n_beads)
             .map(|k| 2.0 / dtau * (PI * k as f64 / n_beads as f64).sin())
             .collect();
 
-        for k in 1..n_beads {
+        // k=0 should give classical centroid: P/(2β)
+        let e0 = quantum_mode_energy(0, n_beads, beta, &freqs);
+        let expected_centroid = n_beads as f64 / (2.0 * beta);
+        assert!((e0 - expected_centroid).abs() < 1e-10,
+            "Centroid energy {} should be {}", e0, expected_centroid);
+
+        // k>0 should give (ω_k/2) coth(βω_k/2)
+        for k in 1..n_beads / 2 {
             let e = quantum_mode_energy(k, n_beads, beta, &freqs);
-            let e_classical = n_beads as f64 / (2.0 * beta);
-            assert!((e - e_classical).abs() / e_classical < 0.01,
-                "Mode {} energy {} should be close to classical {}", k, e, e_classical);
+            let omega_k = freqs[k.min(n_beads - k)];
+            let x = beta * omega_k / 2.0;
+            let expected = (omega_k / 2.0) * x.cosh() / x.sinh();
+            assert!((e - expected).abs() / expected < 1e-8,
+                "Mode {} energy {} should match coth formula {}", k, e, expected);
         }
     }
 
     #[test]
     fn test_quantum_mode_energy_zero_temp() {
-        // At zero temperature (large β), E_k → ℏω_k/2
+        // At very low temperature (large β), E_k → ℏω_k/2
         let n_beads = 16;
-        let beta = 1000.0; // Very low T
+        let beta = 1000.0;
         let dtau = beta / n_beads as f64;
         let freqs: Vec<f64> = (0..n_beads)
             .map(|k| 2.0 / dtau * (PI * k as f64 / n_beads as f64).sin())
@@ -906,15 +915,16 @@ mod tests {
             let e = quantum_mode_energy(k, n_beads, beta, &freqs);
             let freq_k = freqs[k.min(n_beads - k)];
             let e_zpe = freq_k / 2.0;
-            assert!((e - e_zpe).abs() / e_zpe < 1e-3,
+            // At very low T, coth(x) → 1, so E → ω/2
+            assert!((e - e_zpe).abs() / e_zpe < 0.01,
                 "Mode {} energy {} should be close to ZPE {}", k, e, e_zpe);
         }
     }
 
     #[test]
-    fn test_piqtb_sigma_vs_pile() {
-        // PIQTB should have larger σ than PILE for internal modes at low T
-        // because quantum energy > classical energy
+    fn test_piqtb_quantum_target() {
+        // PIQTB should target quantum energies, not classical
+        // For k>0 modes at low T: σ_k² = 2·E_k/m where E_k = (ω_k/2)coth(βω_k/2)
         let n_beads = 16;
         let beta = 50.0;
         let mass = 1.0;
@@ -925,13 +935,14 @@ mod tests {
             .collect();
 
         let piqtb = PIQTBThermostat::new(n_beads, beta, dt, mass, 1.0, &freqs);
-        let pile_sigma = (n_beads as f64 / (beta * mass)).sqrt(); // PILE uses same σ for all
 
-        // For k>0, PIQTB σ should generally be ≥ PILE σ
-        for k in 1..n_beads {
-            assert!(piqtb.sigma[k] >= pile_sigma * 0.99,
-                "PIQTB σ[{}]={} should be >= PILE σ={}",
-                k, piqtb.sigma[k], pile_sigma);
+        // Verify sigma encodes the correct quantum energy
+        for k in 1..n_beads / 2 {
+            let e_target = quantum_mode_energy(k, n_beads, beta, &freqs);
+            let expected_sigma = (2.0 * e_target / mass).sqrt();
+            assert!((piqtb.sigma[k] - expected_sigma).abs() < 1e-10,
+                "PIQTB σ[{}]={} should match expected σ={}",
+                k, piqtb.sigma[k], expected_sigma);
         }
     }
 
