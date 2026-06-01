@@ -186,44 +186,55 @@ impl NormalModeTransform {
 
         let pf = p as f64;
 
-        // Reconstruct complex FFT coefficients from real normal mode coefficients
-        // Forward: modes[k] = -Im[k] * sqrt(2/P)  for k > P/2
-        //   => Im[k] = -modes[k] / sqrt(2/P) = -sin_coeff
-        // And Hermitian symmetry: X[P-k] = conj(X[k])
+        // Reconstruct the full complex FFT spectrum X[k] from normal mode coefficients.
+        //
+        // Forward mapping was:
+        //   modes[0]   = Re[0] / sqrt(P)             (centroid)
+        //   modes[k]   = Re[k] * sqrt(2/P)           (cos, 1 <= k < P/2)
+        //   modes[P/2] = Re[P/2] / sqrt(P)           (Nyquist)
+        //   modes[k]   = -Im[k] * sqrt(2/P)          (sin, P/2 < k < P)
+        //
+        // So inversely:
+        //   Re[k] = modes[k] / sqrt(2/P)  for cos modes
+        //   Im[k] = -modes[k] / sqrt(2/P) for sin modes
+        //
+        // Hermitian symmetry for real signal: X[P-k] = conj(X[k])
+        //   Re[P-k] = Re[k],  Im[P-k] = -Im[k]
+
         let mut re = vec![0.0; p];
         let mut im = vec![0.0; p];
 
-        // k=0: centroid
+        // k=0: centroid (Im[0] = 0 for real signal)
         re[0] = modes[0] * pf.sqrt();
 
-        // cos modes: k = 1..P/2-1
-        for k in 1..p / 2 {
-            re[k] = modes[k] / (2.0 / pf).sqrt();
-        }
-
-        // k = P/2 (Nyquist)
+        // k = P/2: Nyquist (Im[P/2] = 0 for real signal)
         if p % 2 == 0 {
             re[p / 2] = modes[p / 2] * pf.sqrt();
         }
 
-        // sin modes k > P/2: Im[k] = -modes[k] / sqrt(2/P)
-        for k in (p / 2 + 1)..p {
-            let sin_coeff = modes[k] / (2.0 / pf).sqrt();
-            im[k] = -sin_coeff;
-        }
-
-        // Apply Hermitian symmetry: X[P-k] = conj(X[k]) for k = 1..P/2-1
+        // For k = 1..P/2-1: cos mode gives Re[k], sin mode at P-k gives Im[k]
+        // modes[k] encodes cos(2πki/P) coefficient → Re[k]
+        // modes[P-k] encodes sin(2π(P-k)i/P) coefficient → Im[P-k]
+        // But sin(2π(P-k)i/P) = -sin(2πki/P), so:
+        //   modes[P-k] = -Im[P-k] * sqrt(2/P)  →  Im[P-k] = -modes[P-k] / sqrt(2/P)
+        // By Hermitian: Im[k] = -Im[P-k] = modes[P-k] / sqrt(2/P)
+        let scale = (2.0 / pf).sqrt();
         for k in 1..p / 2 {
+            re[k] = modes[k] / scale;
+            im[k] = modes[p - k] / scale;  // from Hermitian symmetry of sin mode at P-k
+            // Apply Hermitian symmetry: X[P-k] = conj(X[k])
             re[p - k] = re[k];
             im[p - k] = -im[k];
         }
 
         // Inverse FFT via conjugate: IFFT(X) = (1/P) conj(FFT(conj(X)))
+        // Step 1: conjugate input
         for v in im.iter_mut() { *v = -*v; }
+        // Step 2: forward FFT
         fft_radix2(&mut re, &mut im, false);
-
-        // Scale by 1/P for inverse
+        // Step 3: conjugate and scale by 1/P
         for v in re.iter_mut() { *v /= pf; }
+        // (imaginary parts should be ~0 for real signal, ignored)
 
         re
     }
@@ -766,6 +777,56 @@ impl<P: Potential> PIMDSimulation<P> {
             // === O step: thermostat in normal mode space ===
             let mut mode_v = nm_transform.velocities_to_normal_modes(&polymer.velocities);
             thermostat.apply_o_step(&mut mode_v);
+            polymer.velocities = nm_transform.velocities_to_beads(&mode_v);
+        });
+
+        self.step += 1;
+    }
+
+    /// Perform one PIMD step using PIQTB (quantum thermal bath) thermostat.
+    ///
+    /// Same OBABO structure as `step_obabo` but uses the PIQTB thermostat
+    /// which targets quantum harmonic oscillator energies per mode:
+    ///   E_k = (ℏω_k/2) coth(βℏω_k/2)
+    ///
+    /// For harmonic systems, this gives exact quantum results with any P.
+    /// For anharmonic systems, it significantly reduces the number of
+    /// beads needed for convergence.
+    ///
+    /// # Arguments
+    /// * `piqtb` - Pre-constructed PIQTB thermostat (from `piglet::PIQTBThermostat::new`)
+    pub fn step_obabo_piqtb(&mut self, piqtb: &super::piglet::PIQTBThermostat) {
+        let dt = self.dt;
+        let half_dt = dt / 2.0;
+        let nm_transform = &self.nm_transform;
+
+        self.polymers.par_iter_mut().for_each(|polymer| {
+            // O step with PIQTB
+            let mut mode_v = nm_transform.velocities_to_normal_modes(&polymer.velocities);
+            piqtb.apply_o_step(&mut mode_v);
+            polymer.velocities = nm_transform.velocities_to_beads(&mode_v);
+
+            // B step
+            for i in 0..polymer.n_beads {
+                polymer.velocities[i] += half_dt * polymer.forces[i] / polymer.mass;
+            }
+
+            // A step
+            for i in 0..polymer.n_beads {
+                polymer.positions[i] += dt * polymer.velocities[i];
+            }
+
+            // Recompute forces
+            polymer.compute_forces();
+
+            // B step
+            for i in 0..polymer.n_beads {
+                polymer.velocities[i] += half_dt * polymer.forces[i] / polymer.mass;
+            }
+
+            // O step with PIQTB
+            let mut mode_v = nm_transform.velocities_to_normal_modes(&polymer.velocities);
+            piqtb.apply_o_step(&mut mode_v);
             polymer.velocities = nm_transform.velocities_to_beads(&mode_v);
         });
 

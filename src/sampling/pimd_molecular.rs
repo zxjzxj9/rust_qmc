@@ -652,6 +652,83 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
         self.step += 1;
     }
 
+    /// OBABO step with PIQTB quantum thermal bath thermostat.
+    ///
+    /// Uses the PIQTB thermostat which enforces quantum harmonic oscillator
+    /// energy distributions per mode, enabling faster convergence with
+    /// fewer beads for molecular systems.
+    pub fn step_obabo_piqtb(&mut self, piqtb: &super::piglet::MolecularPIQTB) {
+        let dt = self.dt;
+        let half_dt = dt / 2.0;
+        let nm_transform = &self.nm_transform;
+        let ndof = self.ndof;
+        let n_beads = self.polymers[0].n_beads;
+
+        self.polymers.par_iter_mut().for_each(|polymer| {
+            // O step with PIQTB
+            let mut mode_vel: Vec<Vec<f64>> = vec![vec![0.0; ndof]; n_beads];
+            for d in 0..ndof {
+                let bead_v: Vec<f64> = polymer.velocities.iter().map(|v| v[d]).collect();
+                let modes = nm_transform.to_normal_modes(&bead_v);
+                for k in 0..n_beads {
+                    mode_vel[k][d] = modes[k];
+                }
+            }
+            piqtb.apply_o_step(&mut mode_vel);
+            for d in 0..ndof {
+                let modes: Vec<f64> = mode_vel.iter().map(|m| m[d]).collect();
+                let bead_v = nm_transform.to_beads(&modes);
+                for i in 0..n_beads {
+                    polymer.velocities[i][d] = bead_v[i];
+                }
+            }
+
+            // B step
+            for i in 0..n_beads {
+                for d in 0..ndof {
+                    polymer.velocities[i][d] += half_dt * polymer.forces[i][d] / polymer.mass_dof[d];
+                }
+            }
+
+            // A step
+            for i in 0..n_beads {
+                for d in 0..ndof {
+                    polymer.positions[i][d] += dt * polymer.velocities[i][d];
+                }
+            }
+
+            // Recompute forces
+            polymer.compute_forces();
+
+            // B step
+            for i in 0..n_beads {
+                for d in 0..ndof {
+                    polymer.velocities[i][d] += half_dt * polymer.forces[i][d] / polymer.mass_dof[d];
+                }
+            }
+
+            // O step with PIQTB
+            let mut mode_vel: Vec<Vec<f64>> = vec![vec![0.0; ndof]; n_beads];
+            for d in 0..ndof {
+                let bead_v: Vec<f64> = polymer.velocities.iter().map(|v| v[d]).collect();
+                let modes = nm_transform.to_normal_modes(&bead_v);
+                for k in 0..n_beads {
+                    mode_vel[k][d] = modes[k];
+                }
+            }
+            piqtb.apply_o_step(&mut mode_vel);
+            for d in 0..ndof {
+                let modes: Vec<f64> = mode_vel.iter().map(|m| m[d]).collect();
+                let bead_v = nm_transform.to_beads(&modes);
+                for i in 0..n_beads {
+                    polymer.velocities[i][d] = bead_v[i];
+                }
+            }
+        });
+
+        self.step += 1;
+    }
+
     /// Average virial energy across all polymers
     pub fn average_virial_energy(&self) -> f64 {
         self.polymers.par_iter()
