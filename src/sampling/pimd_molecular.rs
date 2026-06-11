@@ -736,6 +736,23 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
             .sum::<f64>() / self.polymers.len() as f64
     }
 
+    /// Average Takahashi-Imada virial energy across all polymers.
+    ///
+    /// Uses the TI-corrected virial estimator which includes the
+    /// (dτ²/12) Σ_a |F_a|²/m_a correction term.
+    pub fn average_ti_virial_energy(&self) -> f64 {
+        self.polymers.par_iter()
+            .map(|p| p.ti_virial_energy_estimator())
+            .sum::<f64>() / self.polymers.len() as f64
+    }
+
+    /// Average energy using the appropriate estimator (TI if enabled, virial otherwise).
+    pub fn average_energy(&self) -> f64 {
+        self.polymers.par_iter()
+            .map(|p| p.energy_estimator())
+            .sum::<f64>() / self.polymers.len() as f64
+    }
+
     /// Average potential energy across all polymers
     pub fn average_potential_energy(&self) -> f64 {
         self.polymers.par_iter()
