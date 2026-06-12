@@ -466,14 +466,16 @@ pub fn run_pimd_umbrella_sampling<P: MolecularPotential>(
     hist_min: f64,
     hist_max: f64,
     label: &str,
+    use_ti: bool,
 ) -> Vec<UmbrellaWindow> {
     let n_windows = window_centers.len();
     let hist_bw = (hist_max - hist_min) / n_hist_bins as f64;
     let sample_interval = 10;
     let gamma_centroid = 0.001;
 
-    println!("  {} umbrella sampling: {} windows, κ = {:.4} Ha/Bohr²",
-             label, n_windows, bias_spring_constant);
+    println!("  {} umbrella sampling: {} windows, κ = {:.4} Ha/Bohr²{}",
+             label, n_windows, bias_spring_constant,
+             if use_ti { " [TI fourth-order]" } else { "" });
     println!("  Beads: {}, replicas: {}, dt: {:.4}", n_beads, n_polymers, dt);
     println!("  Per window: {} equil + {} production steps", n_equilibrate, n_production);
     println!();
@@ -486,9 +488,15 @@ pub fn run_pimd_umbrella_sampling<P: MolecularPotential>(
             potential.clone(), bias, donor, proton, acceptor,
         );
 
-        let mut sim = MolecularPIMD::new(
-            n_polymers, n_beads, beta, dt, gamma_centroid, biased_pot,
-        );
+        let mut sim = if use_ti {
+            MolecularPIMD::new_with_ti(
+                n_polymers, n_beads, beta, dt, gamma_centroid, biased_pot,
+            )
+        } else {
+            MolecularPIMD::new(
+                n_polymers, n_beads, beta, dt, gamma_centroid, biased_pot,
+            )
+        };
 
         // Equilibrate
         for _step in 0..n_equilibrate {
@@ -521,7 +529,7 @@ pub fn run_pimd_umbrella_sampling<P: MolecularPotential>(
                     n_samples += 1;
                 }
 
-                energy_sum += sim.average_virial_energy();
+                energy_sum += sim.average_energy();
             }
         }
 
@@ -630,13 +638,14 @@ pub fn run_zundel_umbrella_sampling(
         n_hist_bins,
         hist_min, hist_max,
         "Classical",
+        false,
     );
 
     // =========================================================================
-    // Quantum umbrella sampling (P = n_beads)
+    // Quantum umbrella sampling (P = n_beads, primitive)
     // =========================================================================
     println!("============================================================");
-    println!("  QUANTUM Umbrella Sampling (P = {})", n_beads);
+    println!("  QUANTUM Umbrella Sampling (P = {}, primitive)", n_beads);
     println!("============================================================");
 
     let q_windows = run_pimd_umbrella_sampling(
@@ -653,6 +662,31 @@ pub fn run_zundel_umbrella_sampling(
         n_hist_bins,
         hist_min, hist_max,
         "Quantum",
+        false,
+    );
+
+    // =========================================================================
+    // Quantum umbrella sampling with TI (P = n_beads, fourth-order)
+    // =========================================================================
+    println!("============================================================");
+    println!("  QUANTUM+TI Umbrella Sampling (P = {}, fourth-order)", n_beads);
+    println!("============================================================");
+
+    let ti_windows = run_pimd_umbrella_sampling(
+        pes.clone(),
+        n_polymers,
+        n_beads,
+        beta,
+        dt,
+        n_equilibrate,
+        n_production,
+        window_centers,
+        bias_spring_constant,
+        donor, proton, acceptor,
+        n_hist_bins,
+        hist_min, hist_max,
+        "Quantum+TI",
+        true,
     );
 
     // =========================================================================
@@ -671,11 +705,17 @@ pub fn run_zundel_umbrella_sampling(
     println!("    Window free energies (Ha): {:?}",
              cl_free_energies.iter().map(|f| format!("{:.4}", f)).collect::<Vec<_>>());
 
-    // Quantum WHAM
+    // Quantum WHAM (primitive)
     let (q_pmf, q_free_energies, q_wham_iter) = wham.solve(&q_windows);
-    println!("  Quantum WHAM converged in {} iterations", q_wham_iter);
+    println!("  Quantum (primitive) WHAM converged in {} iterations", q_wham_iter);
     println!("    Window free energies (Ha): {:?}",
              q_free_energies.iter().map(|f| format!("{:.4}", f)).collect::<Vec<_>>());
+
+    // Quantum+TI WHAM
+    let (ti_pmf, ti_free_energies, ti_wham_iter) = wham.solve(&ti_windows);
+    println!("  Quantum+TI WHAM converged in {} iterations", ti_wham_iter);
+    println!("    Window free energies (Ha): {:?}",
+             ti_free_energies.iter().map(|f| format!("{:.4}", f)).collect::<Vec<_>>());
     println!();
 
     // =========================================================================
@@ -686,18 +726,19 @@ pub fn run_zundel_umbrella_sampling(
     // Find barrier height: max PMF near δ=0 minus min PMF
     let cl_barrier = find_barrier(&cl_pmf, bin_centers);
     let q_barrier = find_barrier(&q_pmf, bin_centers);
+    let ti_barrier = find_barrier(&ti_pmf, bin_centers);
 
-    println!("============================================================");
-    println!("                  PMF COMPARISON SUMMARY");
-    println!("============================================================");
-    println!("  {:>20} | {:>14} | {:>14}", "Property", "Classical", "Quantum");
-    println!("  {:>20} | {:>14} | {:>14}", "--------------------", "--------------", "--------------");
-    println!("  {:>20} | {:>14.6} | {:>14.6}", "Barrier (Ha)", cl_barrier, q_barrier);
-    println!("  {:>20} | {:>14.2} | {:>14.2}", "Barrier (kcal/mol)",
-             cl_barrier * 627.509, q_barrier * 627.509);
-    println!("  {:>20} | {:>14} | {:>14}", "WHAM iterations",
-             format!("{}", cl_wham_iter), format!("{}", q_wham_iter));
-    println!("============================================================");
+    println!("========================================================================");
+    println!("                        PMF COMPARISON SUMMARY");
+    println!("========================================================================");
+    println!("  {:>20} | {:>14} | {:>14} | {:>14}", "Property", "Classical", "Quantum", "Quantum+TI");
+    println!("  {:>20} | {:>14} | {:>14} | {:>14}", "--------------------", "--------------", "--------------", "--------------");
+    println!("  {:>20} | {:>14.6} | {:>14.6} | {:>14.6}", "Barrier (Ha)", cl_barrier, q_barrier, ti_barrier);
+    println!("  {:>20} | {:>14.2} | {:>14.2} | {:>14.2}", "Barrier (kcal/mol)",
+             cl_barrier * 627.509, q_barrier * 627.509, ti_barrier * 627.509);
+    println!("  {:>20} | {:>14} | {:>14} | {:>14}", "WHAM iterations",
+             format!("{}", cl_wham_iter), format!("{}", q_wham_iter), format!("{}", ti_wham_iter));
+    println!("========================================================================");
     println!();
 
     if q_barrier < cl_barrier - 0.0001 {
@@ -705,10 +746,12 @@ pub fn run_zundel_umbrella_sampling(
         println!("  * Quantum tunneling REDUCES the effective barrier by {:.2} kcal/mol!", reduction);
         println!("    Classical barrier: {:.2} kcal/mol", cl_barrier * 627.509);
         println!("    Quantum barrier:   {:.2} kcal/mol", q_barrier * 627.509);
-    } else {
-        println!("  o Classical and quantum barriers are similar.");
-        println!("    This may indicate the barrier is too low for significant tunneling,");
-        println!("    or more sampling is needed.");
+    }
+    if ti_barrier < q_barrier - 0.0001 {
+        let ti_diff = (q_barrier - ti_barrier) * 627.509;
+        println!("  * TI correction shifts barrier by {:.2} kcal/mol vs primitive", ti_diff);
+    } else if (ti_barrier - q_barrier).abs() < 0.0001 {
+        println!("  * TI and primitive quantum barriers agree (well-converged with P={}).", n_beads);
     }
     println!();
 
@@ -716,26 +759,27 @@ pub fn run_zundel_umbrella_sampling(
     // Output files
     // =========================================================================
 
-    // PMF comparison
+    // PMF comparison (now includes TI)
     {
         let file = File::create("pimd_umbrella_pmf.txt").unwrap();
         let mut w = BufWriter::new(file);
-        writeln!(w, "# delta W_classical(Ha) W_quantum(Ha) W_cl(kcal/mol) W_q(kcal/mol)").unwrap();
+        writeln!(w, "# delta W_classical(Ha) W_quantum(Ha) W_quantum_TI(Ha) W_cl(kcal/mol) W_q(kcal/mol) W_ti(kcal/mol)").unwrap();
         for i in 0..n_hist_bins {
-            writeln!(w, "{:.6} {:.8} {:.8} {:.4} {:.4}",
-                     bin_centers[i], cl_pmf[i], q_pmf[i],
-                     cl_pmf[i] * 627.509, q_pmf[i] * 627.509).unwrap();
+            writeln!(w, "{:.6} {:.8} {:.8} {:.8} {:.4} {:.4} {:.4}",
+                     bin_centers[i], cl_pmf[i], q_pmf[i], ti_pmf[i],
+                     cl_pmf[i] * 627.509, q_pmf[i] * 627.509, ti_pmf[i] * 627.509).unwrap();
         }
         println!("  PMF (WHAM)              -> pimd_umbrella_pmf.txt");
     }
 
-    // Per-window histograms
+    // Per-window histograms (includes TI)
     {
         let file = File::create("pimd_umbrella_histograms.txt").unwrap();
         let mut w = BufWriter::new(file);
         write!(w, "# delta").unwrap();
         for (i, center) in window_centers.iter().enumerate() {
-            write!(w, " cl_win{}(d0={:.3}) q_win{}(d0={:.3})", i, center, i, center).unwrap();
+            write!(w, " cl_win{}(d0={:.3}) q_win{}(d0={:.3}) ti_win{}(d0={:.3})",
+                   i, center, i, center, i, center).unwrap();
         }
         writeln!(w).unwrap();
 
@@ -754,24 +798,31 @@ pub fn run_zundel_umbrella_sampling(
                 } else {
                     0.0
                 };
-                write!(w, " {:.6} {:.6}", cl_p, q_p).unwrap();
+                let ti_p = if ti_windows[i].n_samples > 0 {
+                    ti_windows[i].histogram[j] / (ti_windows[i].n_samples as f64 * hist_bw)
+                } else {
+                    0.0
+                };
+                write!(w, " {:.6} {:.6} {:.6}", cl_p, q_p, ti_p).unwrap();
             }
             writeln!(w).unwrap();
         }
         println!("  Per-window histograms   -> pimd_umbrella_histograms.txt");
     }
 
-    // WHAM convergence info
+    // WHAM convergence info (includes TI)
     {
         let file = File::create("pimd_umbrella_convergence.txt").unwrap();
         let mut w = BufWriter::new(file);
         writeln!(w, "# WHAM convergence summary").unwrap();
-        writeln!(w, "# Classical: {} iterations", cl_wham_iter).unwrap();
-        writeln!(w, "# Quantum:   {} iterations", q_wham_iter).unwrap();
-        writeln!(w, "# window center cl_F(Ha) q_F(Ha)").unwrap();
+        writeln!(w, "# Classical:  {} iterations", cl_wham_iter).unwrap();
+        writeln!(w, "# Quantum:    {} iterations", q_wham_iter).unwrap();
+        writeln!(w, "# Quantum+TI: {} iterations", ti_wham_iter).unwrap();
+        writeln!(w, "# window center cl_F(Ha) q_F(Ha) ti_F(Ha)").unwrap();
         for i in 0..window_centers.len() {
-            writeln!(w, "{:.6} {:.8} {:.8}",
-                     window_centers[i], cl_free_energies[i], q_free_energies[i]).unwrap();
+            writeln!(w, "{:.6} {:.8} {:.8} {:.8}",
+                     window_centers[i], cl_free_energies[i], q_free_energies[i],
+                     ti_free_energies[i]).unwrap();
         }
         println!("  WHAM convergence        -> pimd_umbrella_convergence.txt");
     }
