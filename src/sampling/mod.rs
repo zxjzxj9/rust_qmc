@@ -11,6 +11,7 @@ mod pimd_molecular;
 mod pimd_rpc;
 mod piglet;
 mod umbrella;
+mod metadynamics;
 mod dftb;
 mod optimize;
 mod sr_optimize;
@@ -54,6 +55,10 @@ pub use piglet::{
 pub use umbrella::{
     UmbrellaBias, BiasedMolecularPotential, UmbrellaWindow, WHAMSolver,
     run_pimd_umbrella_sampling, run_zundel_umbrella_sampling,
+};
+pub use metadynamics::{
+    GaussianHill, MetadynamicsBias, MetadynamicsPotential, MetadynamicsResult,
+    run_pimd_metadynamics, run_zundel_metadynamics,
 };
 pub use dftb::ToyDFTB;
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
