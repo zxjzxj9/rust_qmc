@@ -1009,9 +1009,10 @@ mod tests {
         let kt = 0.001;
         let mut bias = MetadynamicsBias::new(0.01, 0.2, 10.0, kt, -3.0, 3.0, 100);
 
-        // Deposit hills uniformly
-        for i in -10..=10 {
-            bias.deposit_hill(i as f64 * 0.1);
+        // Deposit many hills at δ=0 — this fills the well there,
+        // so the FES should show the minimum at δ=0 (most explored region)
+        for _ in 0..30 {
+            bias.deposit_hill(0.0);
         }
 
         let (cv, fes) = bias.reconstruct_fes(-2.0, 2.0, 100);
@@ -1021,13 +1022,21 @@ mod tests {
             assert!(v >= -1e-10, "FES should be non-negative, got {:.8}", v);
         }
 
-        // FES minimum should be near δ=0 (where most hills were deposited)
+        // FES minimum should be at δ=0 (where all hills were deposited)
         let min_idx = fes.iter()
             .enumerate()
             .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .unwrap().0;
         assert!(cv[min_idx].abs() < 0.5,
                 "FES minimum should be near δ=0, got δ={:.3}", cv[min_idx]);
+
+        // FES should be larger away from δ=0
+        // Find value at the edges
+        let edge_val = fes[0]; // at δ=-2.0
+        let center_val = fes[min_idx]; // at minimum
+        assert!(edge_val > center_val + 1e-6,
+                "FES should be higher at edges ({:.6}) than center ({:.6})",
+                edge_val, center_val);
     }
 
     #[test]
