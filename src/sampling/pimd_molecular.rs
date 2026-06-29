@@ -21,56 +21,10 @@ use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-// =============================================================================
-// Multi-Dimensional Potential Trait
-// =============================================================================
+use super::potentials::MolecularPotential;
 
-/// Trait for multi-dimensional molecular potential energy surfaces.
-///
-/// Coordinates are stored as a flat array: [x0,y0,z0, x1,y1,z1, ...]
-/// where atom i has coordinates at indices [3*i, 3*i+1, 3*i+2].
-pub trait MolecularPotential: Clone + Send + Sync {
-    /// Number of atoms in the system
-    fn n_atoms(&self) -> usize;
-
-    /// Number of degrees of freedom (= 3 * n_atoms for 3D)
-    fn ndof(&self) -> usize {
-        3 * self.n_atoms()
-    }
-
-    /// Evaluate the potential energy V(R)
-    ///
-    /// # Arguments
-    /// * `coords` - Flat array of Cartesian coordinates [x0,y0,z0, x1,y1,z1, ...]
-    fn energy(&self, coords: &[f64]) -> f64;
-
-    /// Compute forces F = -∇V and store in the `forces` buffer
-    ///
-    /// Default: numerical central difference (slow but correct).
-    /// Override for analytical forces.
-    fn forces(&self, coords: &[f64], forces: &mut [f64]) {
-        let h = 1e-6;
-        let ndof = self.ndof();
-        let mut coords_plus = coords.to_vec();
-        let mut coords_minus = coords.to_vec();
-        for d in 0..ndof {
-            coords_plus[d] = coords[d] + h;
-            coords_minus[d] = coords[d] - h;
-            forces[d] = -(self.energy(&coords_plus) - self.energy(&coords_minus)) / (2.0 * h);
-            coords_plus[d] = coords[d];
-            coords_minus[d] = coords[d];
-        }
-    }
-
-    /// Atom masses in atomic units [m0, m1, m2, ...]
-    fn masses(&self) -> &[f64];
-
-    /// Reference equilibrium geometry for initialization
-    fn reference_geometry(&self) -> Vec<f64>;
-
-    /// Name for display
-    fn name(&self) -> &'static str;
-}
+// The `MolecularPotential` trait and the concrete molecular potentials now live
+// in `super::potentials`. It is imported above.
 
 // =============================================================================
 // Multi-Atom Ring Polymer

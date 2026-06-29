@@ -12,6 +12,8 @@ use rand_distr::{Distribution, Normal, Uniform};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
+use super::potentials::Potential;
+
 /// A single quantum path in imaginary time with M beads.
 /// Represents a particle's worldline with PBC: x[M] = x[0]
 #[derive(Clone, Debug)]
@@ -498,24 +500,8 @@ pub fn run_pimc_harmonic(
 // Generalized Potential Support
 // =============================================================================
 
-/// Trait for 1D potentials that can be used with PIMC/PIMD
-pub trait Potential: Clone + Send + Sync {
-    /// Evaluate the potential V(x) at position x
-    fn evaluate(&self, x: f64) -> f64;
-    
-    /// Compute the force F(x) = -dV/dx at position x
-    /// Default implementation uses numerical central difference
-    fn force(&self, x: f64) -> f64 {
-        let h = 1e-7;
-        -(self.evaluate(x + h) - self.evaluate(x - h)) / (2.0 * h)
-    }
-    
-    /// Name of the potential for display
-    fn name(&self) -> &'static str;
-    
-    /// Suggested initialization width for beads
-    fn init_width(&self) -> f64;
-}
+// The `Potential` trait and the concrete 1D potentials now live in
+// `super::potentials`. They are imported at the top of this module.
 
 /// Harmonic oscillator potential: V(x) = (1/2)mw²x²
 #[derive(Clone)]

@@ -1,6 +1,7 @@
 //! Sampling module - Monte Carlo sampling methods for QMC.
 
 mod traits;
+pub mod potentials;
 mod vmc;
 mod dmc;
 mod is_dmc;
@@ -19,6 +20,8 @@ pub mod geometry_opt;
 pub mod force_variance;
 
 pub use traits::{EnergyCalculator, ForceCalculator, Walker, BranchingResult, VmcWalker};
+pub use potentials::{Potential, MolecularPotential,
+                     SplittablePotential, SplittableMolecularPotential};
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
               DDVMCParams, DDVMCResults, DriftDiffusionVMC};
 pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
@@ -27,8 +30,8 @@ pub use dmc::{run_dmc_sampling, HarmonicWalker, HydrogenAtomWalker, HydrogenMole
 pub use is_dmc::{ISDMCParams, ISDMCResults, ImportanceSampledDMC};
 pub use pimc::{
     QuantumPath, PIMCSimulation, run_pimc_harmonic,
-    // Generalized potentials
-    Potential, HarmonicPotential, SombreroPotential, DoubleWellPotential,
+    // Concrete 1D potentials (still defined in pimc for now)
+    HarmonicPotential, SombreroPotential, DoubleWellPotential,
     ProtonTransferPotential,
     GeneralPath, GeneralPIMC, run_pimc_sombrero,
 };
@@ -40,13 +43,12 @@ pub use pimd::{
     run_pimd_proton_transfer,
 };
 pub use pimd_molecular::{
-    MolecularPotential, MolecularRingPolymer, MolecularPILE, MolecularPIMD,
+    MolecularRingPolymer, MolecularPILE, MolecularPIMD,
     BifluoridePES, run_pimd_bifluoride,
     ZundelPES, run_pimd_zundel, free_energy_profile,
 };
 pub use pimd_rpc::{
-    RPContraction, SplittablePotential, SplittableMolecularPotential,
-    SplittableDoubleWell, RPCRingPolymer, RPCSimulation,
+    RPContraction, SplittableDoubleWell, RPCRingPolymer, RPCSimulation,
 };
 pub use piglet::{
     PIQTBThermostat, MolecularPIQTB, PIGLETThermostat,

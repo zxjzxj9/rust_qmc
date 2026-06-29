@@ -22,7 +22,7 @@ use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-use super::pimc::Potential;
+use super::potentials::Potential;
 
 // =============================================================================
 // Normal Mode Transformation

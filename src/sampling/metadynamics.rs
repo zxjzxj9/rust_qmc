@@ -24,7 +24,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::{Arc, RwLock};
 
-use super::pimd_molecular::{MolecularPotential, MolecularPIMD};
+use super::potentials::MolecularPotential;
+use super::pimd_molecular::MolecularPIMD;
 
 // =============================================================================
 // Gaussian Hill
@@ -882,7 +883,7 @@ pub fn run_zundel_metadynamics(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::pimd_molecular::MolecularPotential;
+    use super::super::potentials::MolecularPotential;
 
     /// Simple harmonic potential for testing (single atom, 3 DOF)
     #[derive(Clone)]

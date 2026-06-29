@@ -22,7 +22,8 @@
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-use super::pimd_molecular::{MolecularPotential, MolecularPIMD};
+use super::potentials::MolecularPotential;
+use super::pimd_molecular::MolecularPIMD;
 
 // =============================================================================
 // Umbrella Bias
@@ -877,7 +878,7 @@ fn find_barrier(pmf: &[f64], bin_centers: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::pimd_molecular::MolecularPotential;
+    use super::super::potentials::MolecularPotential;
 
     /// Simple 1D-like potential for testing: harmonic in x, flat in y/z.
     /// Single atom, 3 DOF.

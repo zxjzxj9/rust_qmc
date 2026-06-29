@@ -18,9 +18,8 @@
 //!
 //! Reference: Markland & Manolopoulos, JCP 129, 024105 (2008)
 
-use super::pimc::Potential;
+use super::potentials::{Potential, SplittablePotential};
 use super::pimd::{NormalModeTransform, PILEThermostat};
-use super::pimd_molecular::MolecularPotential;
 
 use rand_distr::{Distribution, Normal};
 use rayon::prelude::*;
@@ -192,34 +191,8 @@ impl RPContraction {
 // Splittable Potential Traits
 // =============================================================================
 
-/// A 1D potential that can be split into fast (cheap) and slow (expensive) parts.
-///
-/// V(x) = V_fast(x) + V_slow(x)
-///
-/// Fast forces are evaluated on all P beads.
-/// Slow forces are evaluated on P' contracted beads and expanded back.
-pub trait SplittablePotential: Potential {
-    /// Fast (cheap) potential energy component
-    fn energy_fast(&self, x: f64) -> f64;
-    /// Slow (expensive) potential energy component
-    fn energy_slow(&self, x: f64) -> f64;
-    /// Fast force: F_fast = -dV_fast/dx
-    fn force_fast(&self, x: f64) -> f64;
-    /// Slow force: F_slow = -dV_slow/dx
-    fn force_slow(&self, x: f64) -> f64;
-}
-
-/// A molecular potential that can be split into fast and slow parts.
-pub trait SplittableMolecularPotential: MolecularPotential {
-    /// Fast potential energy component
-    fn energy_fast(&self, coords: &[f64]) -> f64;
-    /// Slow potential energy component
-    fn energy_slow(&self, coords: &[f64]) -> f64;
-    /// Fast forces
-    fn forces_fast(&self, coords: &[f64], forces: &mut [f64]);
-    /// Slow forces
-    fn forces_slow(&self, coords: &[f64], forces: &mut [f64]);
-}
+// The `SplittablePotential` and `SplittableMolecularPotential` traits now live in
+// `super::potentials`. They are imported at the top of this module.
 
 // =============================================================================
 // Example: Splittable Double Well
