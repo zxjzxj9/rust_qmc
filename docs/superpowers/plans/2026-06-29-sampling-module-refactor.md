@@ -28,8 +28,12 @@ cargo build --examples 2>&1 | tail -5
 
 Expected after every task: all tests `ok` (0 failed), examples build with no errors.
 
-**Baseline:** Before starting Task 1, run the full check and record that it is green.
-If it is not green at baseline, stop — the refactor cannot be verified.
+**Baseline (recorded 2026-06-29):** `test result: ok. 106 passed; 0 failed` and all
+examples build clean (one pre-existing `unused_imports` warning in
+`examples/ch4_sr_optimize.rs`, unrelated to this refactor). So **N = 106** — this
+count must not change in any task. The full test suite takes ~4.6 min to run, so
+each task's verification is not instant; budget for it. If the baseline is not
+green when execution starts, stop — the refactor cannot be verified.
 
 ---
 
