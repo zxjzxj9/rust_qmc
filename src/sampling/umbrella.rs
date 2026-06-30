@@ -579,7 +579,7 @@ pub fn run_zundel_umbrella_sampling(
     window_centers: &[f64],
     bias_spring_constant: f64,
 ) {
-    use super::pimd_molecular::ZundelPES;
+    use super::potentials::molecular::ZundelPES;
 
     let pes = ZundelPES::new();
     let temp_k = 315774.65 / beta;
@@ -966,7 +966,7 @@ mod tests {
     #[test]
     fn test_biased_force_consistency() {
         // Verify that analytical bias forces match numerical finite differences
-        use super::super::pimd_molecular::ZundelPES;
+        use super::super::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let bias = UmbrellaBias::new(0.3, 0.08);
@@ -998,7 +998,7 @@ mod tests {
     #[test]
     fn test_transfer_coordinate_gradient() {
         // Verify ∂δ/∂R against numerical finite differences
-        use super::super::pimd_molecular::ZundelPES;
+        use super::super::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let bias = UmbrellaBias::new(0.0, 0.1);

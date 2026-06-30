@@ -968,7 +968,7 @@ pub fn run_pimd_proton_transfer(
     n_equilibrate: usize,
     n_production: usize,
 ) {
-    use super::pimc::ProtonTransferPotential;
+    use super::potentials::scalar::ProtonTransferPotential;
 
     let potential = ProtonTransferPotential::symmetric(barrier_height, well_distance);
     let omega_well = potential.well_frequency(mass);
@@ -1240,7 +1240,7 @@ pub fn run_pimd_proton_transfer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::pimc::{HarmonicPotential, ProtonTransferPotential};
+    use super::super::potentials::scalar::{HarmonicPotential, ProtonTransferPotential};
     use approx::assert_relative_eq;
 
     #[test]

@@ -20,8 +20,11 @@ pub mod geometry_opt;
 pub mod force_variance;
 
 pub use traits::{EnergyCalculator, ForceCalculator, Walker, BranchingResult, VmcWalker};
-pub use potentials::{Potential, MolecularPotential,
-                     SplittablePotential, SplittableMolecularPotential};
+pub use potentials::{
+    Potential, MolecularPotential, SplittablePotential, SplittableMolecularPotential,
+    HarmonicPotential, SombreroPotential, DoubleWellPotential, ProtonTransferPotential,
+    BifluoridePES, ZundelPES,
+};
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
               DDVMCParams, DDVMCResults, DriftDiffusionVMC};
 pub use optimize::{JastrowOptimizer, OptimizationResult, SamplingStats};
@@ -30,9 +33,6 @@ pub use dmc::{run_dmc_sampling, HarmonicWalker, HydrogenAtomWalker, HydrogenMole
 pub use is_dmc::{ISDMCParams, ISDMCResults, ImportanceSampledDMC};
 pub use pimc::{
     QuantumPath, PIMCSimulation, run_pimc_harmonic,
-    // Concrete 1D potentials (still defined in pimc for now)
-    HarmonicPotential, SombreroPotential, DoubleWellPotential,
-    ProtonTransferPotential,
     GeneralPath, GeneralPIMC, run_pimc_sombrero,
 };
 pub use pimc_fermion::{
@@ -44,8 +44,7 @@ pub use pimd::{
 };
 pub use pimd_molecular::{
     MolecularRingPolymer, MolecularPILE, MolecularPIMD,
-    BifluoridePES, run_pimd_bifluoride,
-    ZundelPES, run_pimd_zundel, free_energy_profile,
+    run_pimd_bifluoride, run_pimd_zundel, free_energy_profile,
 };
 pub use pimd_rpc::{
     RPContraction, SplittableDoubleWell, RPCRingPolymer, RPCSimulation,

@@ -559,7 +559,7 @@ impl<P: SplittablePotential> RPCSimulation<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::pimc::HarmonicPotential;
+    use super::super::potentials::scalar::HarmonicPotential;
     use approx::assert_relative_eq;
 
     /// Harmonic potential as a trivially-splittable potential (all fast, no slow).
