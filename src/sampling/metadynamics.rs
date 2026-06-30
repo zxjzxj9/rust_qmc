@@ -715,7 +715,7 @@ pub fn run_zundel_metadynamics(
     bias_factor: f64,
     deposit_stride: usize,
 ) {
-    use super::pimd_molecular::ZundelPES;
+    use super::potentials::molecular::ZundelPES;
 
     let pes = ZundelPES::new();
     let kt = 1.0 / beta;
@@ -1043,7 +1043,7 @@ mod tests {
     #[test]
     fn test_metadynamics_potential_forces() {
         // Verify that MetadynamicsPotential forces match numerical derivatives
-        use super::super::pimd_molecular::ZundelPES;
+        use super::super::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let kt = 0.001;
