@@ -13,7 +13,6 @@ mod pimd_rpc;
 mod piglet;
 mod umbrella;
 mod metadynamics;
-mod dftb;
 mod optimize;
 mod sr_optimize;
 pub mod geometry_opt;
@@ -23,7 +22,7 @@ pub use traits::{EnergyCalculator, ForceCalculator, Walker, BranchingResult, Vmc
 pub use potentials::{
     Potential, MolecularPotential, SplittablePotential, SplittableMolecularPotential,
     HarmonicPotential, SombreroPotential, DoubleWellPotential, ProtonTransferPotential,
-    BifluoridePES, ZundelPES,
+    BifluoridePES, ZundelPES, ToyDFTB,
 };
 pub use vmc::{MCMCParams, MCMCState, MCMCResults, MCMCSimulation,
               DDVMCParams, DDVMCResults, DriftDiffusionVMC};
@@ -61,7 +60,6 @@ pub use metadynamics::{
     GaussianHill, MetadynamicsBias, MetadynamicsPotential, MetadynamicsResult,
     run_pimd_metadynamics, run_zundel_metadynamics,
 };
-pub use dftb::ToyDFTB;
 pub use geometry_opt::{GeometryOptimizer, GeometryOptResult};
 pub use force_variance::ForceEstimator;
 

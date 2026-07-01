@@ -3,6 +3,7 @@
 pub mod traits;
 pub mod scalar;
 pub mod molecular;
+pub mod dftb;
 
 pub use traits::{
     Potential, MolecularPotential,
@@ -12,3 +13,4 @@ pub use scalar::{
     HarmonicPotential, SombreroPotential, DoubleWellPotential, ProtonTransferPotential,
 };
 pub use molecular::{BifluoridePES, ZundelPES};
+pub use dftb::ToyDFTB;

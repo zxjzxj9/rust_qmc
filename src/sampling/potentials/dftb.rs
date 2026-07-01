@@ -20,7 +20,7 @@
 
 use std::f64;
 use nalgebra::{DMatrix, SymmetricEigen};
-use super::potentials::MolecularPotential;
+use super::traits::MolecularPotential;
 
 // =============================================================================
 // Slater-Koster Parameters
