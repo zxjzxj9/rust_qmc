@@ -19,7 +19,7 @@
 //! Reference: Markland & Manolopoulos, JCP 129, 024105 (2008)
 
 use super::potentials::{Potential, SplittablePotential};
-use super::pimd::{NormalModeTransform, PILEThermostat};
+use super::pimd_core::{NormalModeTransform, PILEThermostat};
 
 use rand_distr::{Distribution, Normal};
 use rayon::prelude::*;

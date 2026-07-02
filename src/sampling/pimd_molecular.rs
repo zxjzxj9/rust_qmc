@@ -445,7 +445,7 @@ pub struct MolecularPIMD<P: MolecularPotential> {
     /// Ring polymers (parallel replicas)
     pub polymers: Vec<MolecularRingPolymer<P>>,
     /// Normal mode transform (shared, dimension-independent)
-    pub nm_transform: super::pimd::NormalModeTransform,
+    pub nm_transform: super::pimd_core::NormalModeTransform,
     /// PILE thermostat
     pub thermostat: MolecularPILE,
     /// Time step
@@ -467,7 +467,7 @@ impl<P: MolecularPotential> MolecularPIMD<P> {
         potential: P,
     ) -> Self {
         let ndof = potential.ndof();
-        let nm_transform = super::pimd::NormalModeTransform::new(n_beads, beta);
+        let nm_transform = super::pimd_core::NormalModeTransform::new(n_beads, beta);
         let thermostat = MolecularPILE::new(
             n_beads, beta, dt,
             potential.masses(),

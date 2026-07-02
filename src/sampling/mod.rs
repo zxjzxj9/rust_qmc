@@ -2,6 +2,7 @@
 
 mod traits;
 pub mod potentials;
+mod pimd_core;
 mod vmc;
 mod dmc;
 mod is_dmc;
@@ -37,10 +38,8 @@ pub use pimc::{
 pub use pimc_fermion::{
     TrialWavefunction, Hydrogen1s, FermionPath, FermionPIMC, run_pimc_hydrogen,
 };
-pub use pimd::{
-    NormalModeTransform, PILEThermostat, RingPolymer, PIMDSimulation,
-    run_pimd_proton_transfer,
-};
+pub use pimd_core::{NormalModeTransform, PILEThermostat};
+pub use pimd::{RingPolymer, PIMDSimulation, run_pimd_proton_transfer};
 pub use pimd_molecular::{
     MolecularRingPolymer, MolecularPILE, MolecularPIMD,
     run_pimd_bifluoride, run_pimd_zundel, free_energy_profile,
