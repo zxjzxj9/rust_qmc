@@ -22,7 +22,8 @@
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-use super::pimd_molecular::{MolecularPotential, MolecularPIMD};
+use crate::sampling::potentials::MolecularPotential;
+use crate::sampling::pimd_molecular::MolecularPIMD;
 
 // =============================================================================
 // Umbrella Bias
@@ -578,7 +579,7 @@ pub fn run_zundel_umbrella_sampling(
     window_centers: &[f64],
     bias_spring_constant: f64,
 ) {
-    use super::pimd_molecular::ZundelPES;
+    use crate::sampling::potentials::molecular::ZundelPES;
 
     let pes = ZundelPES::new();
     let temp_k = 315774.65 / beta;
@@ -877,7 +878,7 @@ fn find_barrier(pmf: &[f64], bin_centers: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::pimd_molecular::MolecularPotential;
+    use crate::sampling::potentials::MolecularPotential;
 
     /// Simple 1D-like potential for testing: harmonic in x, flat in y/z.
     /// Single atom, 3 DOF.
@@ -965,7 +966,7 @@ mod tests {
     #[test]
     fn test_biased_force_consistency() {
         // Verify that analytical bias forces match numerical finite differences
-        use super::super::pimd_molecular::ZundelPES;
+        use crate::sampling::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let bias = UmbrellaBias::new(0.3, 0.08);
@@ -997,7 +998,7 @@ mod tests {
     #[test]
     fn test_transfer_coordinate_gradient() {
         // Verify ∂δ/∂R against numerical finite differences
-        use super::super::pimd_molecular::ZundelPES;
+        use crate::sampling::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let bias = UmbrellaBias::new(0.0, 0.1);
