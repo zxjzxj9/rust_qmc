@@ -24,8 +24,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::{Arc, RwLock};
 
-use super::potentials::MolecularPotential;
-use super::pimd_molecular::MolecularPIMD;
+use crate::sampling::potentials::MolecularPotential;
+use crate::sampling::pimd_molecular::MolecularPIMD;
 
 // =============================================================================
 // Gaussian Hill
@@ -715,7 +715,7 @@ pub fn run_zundel_metadynamics(
     bias_factor: f64,
     deposit_stride: usize,
 ) {
-    use super::potentials::molecular::ZundelPES;
+    use crate::sampling::potentials::molecular::ZundelPES;
 
     let pes = ZundelPES::new();
     let kt = 1.0 / beta;
@@ -883,7 +883,7 @@ pub fn run_zundel_metadynamics(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::potentials::MolecularPotential;
+    use crate::sampling::potentials::MolecularPotential;
 
     /// Simple harmonic potential for testing (single atom, 3 DOF)
     #[derive(Clone)]
@@ -1043,7 +1043,7 @@ mod tests {
     #[test]
     fn test_metadynamics_potential_forces() {
         // Verify that MetadynamicsPotential forces match numerical derivatives
-        use super::super::potentials::molecular::ZundelPES;
+        use crate::sampling::potentials::molecular::ZundelPES;
 
         let pes = ZundelPES::new();
         let kt = 0.001;
